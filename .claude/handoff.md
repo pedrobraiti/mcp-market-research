@@ -4,21 +4,21 @@
 > de forma relativamente detalhada. É o PRIMEIRO arquivo que a próxima sessão lê.
 > Mantenha-o vivo e específico — detalhado o bastante para retomar sem reconstruir o raciocínio.
 
-**Última atualização:** 2026-06-25 — fatia vertical pronta + benchmark gerado
+**Última atualização:** 2026-06-25 — dossiê + endurecimento yfinance + benchmark gerado
 
 ## Onde parei
-O projeto **Scout** (`mcp-market-research`, público em `pedrobraiti/mcp-market-research`) saiu do papel. Já existe **código rodando**: scaffold completo espelhando o `mcp-ibkr-agent` (Valet) + a primeira **fatia vertical** funcionando (yfinance → 3 tools), com 17 testes offline passando, ruff limpo e **validado ao vivo** (`scout.healthcheck AAPL` retorna preço/PE/dividendos reais). Também rodei o **lado Claude Code do benchmark** de pesquisa (3 relatórios em `benchmark/claude-code/`).
+O projeto **Scout** (`mcp-market-research`, público em `pedrobraiti/mcp-market-research`) tem **código rodando**: scaffold espelhando o `mcp-ibkr-agent` (Valet) + **4 tools** funcionando (yfinance), com **26 testes offline** passando, ruff limpo e **validado ao vivo** (AAPL e MSFT retornam dados reais). Rodei o **lado Claude Code do benchmark** (3 relatórios em `benchmark/claude-code/`).
 
-**Aguardando o usuário** rodar os 3 prompts do `benchmark/PROMPTS-FOR-CLAUDE-WEB.md` no claude.ai web e salvar em `benchmark/claude-web/` — aí eu comparo os dois lados e decidimos a camada narrativa.
+**Aguardando o usuário** rodar os 3 prompts do `benchmark/PROMPTS-FOR-CLAUDE-WEB.md` no claude.ai web e salvar em `benchmark/claude-web/` — ele DISSE que está fazendo isso agora. Quando trouxer, eu comparo os dois lados e decidimos a camada narrativa.
 
 ## O que já está implementado (não refazer)
-- `src/scout/` layout hexagonal: `config.py` (pydantic-settings, prefixo `SCOUT_`), `domain/models.py` (CompanySnapshot, Fundamentals, DividendHistory — Decimal, com `as_of`), `domain/ports.py` (`MarketDataSource`, métodos com `as_of`), `adapters/yfinance/market_data.py` (parsing defensivo, `asyncio.to_thread`, import lazy do yfinance, factory injetável p/ testes offline), `server/services.py` (composição) e `server/app.py` (FastMCP, envelope `{ok,data}`, 3 tools). `healthcheck.py` (smoke test ao vivo).
-- Tools: `company_snapshot`, `fundamentals(period)`, `dividends` — todas com `as_of` opcional (ISO).
-- Decisões de design aplicadas: stateless, `as_of`, dado puro (sem veredito), valores derivados quantizados, streak/cut só por anos consecutivos (corrigido o bug que inflava streak atravessando o buraco de dividendos da Apple 1996–2012).
+- `src/scout/` layout hexagonal: `config.py` (pydantic-settings, prefixo `SCOUT_`), `domain/models.py` (CompanySnapshot, Fundamentals, DividendHistory, **CompanyDossier** — Decimal, com `as_of`), `domain/ports.py` (`MarketDataSource`, métodos com `as_of`), `adapters/yfinance/market_data.py` (parsing defensivo, `asyncio.to_thread`, import lazy, factory injetável, **retry/backoff** configurável), `research/dossier.py` (`build_dossier`, `asyncio.gather`, tolerante a falha parcial → `notes`), `server/services.py` e `server/app.py` (FastMCP, envelope `{ok,data}`, **4 tools**). `healthcheck.py`.
+- Tools: `company_dossier(depth)`, `company_snapshot`, `fundamentals(period)`, `dividends` — todas com `as_of` opcional (ISO).
+- Decisões de design aplicadas: stateless, `as_of`, dado puro (sem veredito), valores derivados quantizados, streak/cut só por anos consecutivos, retry deixa falha transitória de se disfarçar de "símbolo inexistente".
 - CI em `.github/workflows/ci.yml` (ruff+pytest, branch `master`).
 
 ## Próximo passo concreto
-Quando o usuário trouxer os relatórios do claude.ai web: comparar os 3 pares (profundidade, precisão, fontes, tratamento de incerteza) e registrar a conclusão (decide a camada narrativa). Em paralelo / se quiser avançar código: `company_dossier` (agrega as 3 tools via `asyncio.gather`) e endurecer o yfinance (cache + retry/backoff + proveniência por campo). Ver `todo.md`.
+Quando o usuário trouxer os relatórios do claude.ai web: comparar os 3 pares (profundidade, precisão, fontes, tratamento de incerteza) e registrar a conclusão (decide a camada narrativa). Se quiser avançar código antes disso: cache TTL + proveniência por campo no yfinance; refinar `had_cut`/streak (dividendos especiais/timing); ou próximas tools por símbolo (`valuation_history`, `quality_metrics`, `technicals`). Ver `todo.md`.
 
 ## Em aberto / armadilhas
 - **Limitações do yfinance (ponto levantado pelo usuário):** é scraper não-oficial do Yahoo — pode quebrar quando o Yahoo muda, tem rate limit, `.info` é pesado e às vezes incompleto, e fundamentos históricos/point-in-time são limitados. Plano (não é "trocar", é "complementar"): manter yfinance como fonte default mas, sendo hexagonal, **cruzar com SEC EDGAR** (fundamentos autoritativos), **FRED** (macro) e **stooq** (preço fallback), e expor **proveniência por campo**. O `as_of` já nasce no contrato mas hoje só é honrado de fato para preço (history) e dividendos (filtro); fundamentos point-in-time dependem do que a fonte dá.

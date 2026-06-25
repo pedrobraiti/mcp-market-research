@@ -6,8 +6,8 @@ Plano vivo do projeto. Tarefas e subtarefas, marcadas conforme concluídas.
 - [ ] **Benchmark de pesquisa (decisão por evidência):** lado Claude Code já gerado (`benchmark/claude-code/`); aguardando o usuário rodar os 3 prompts no claude.ai web (`benchmark/PROMPTS-FOR-CLAUDE-WEB.md`) e salvar em `benchmark/claude-web/`. Depois eu comparo.
 
 ## Próximas
-- [ ] `company_dossier(symbol, depth, as_of)` — meta-tool agregadora com `asyncio.gather` (já dá pra fazer com as 3 fontes atuais + crescer)
-- [ ] Endurecer o adapter yfinance: cache leve + retry/backoff (rate limits), e provê **proveniência por campo** (de onde veio cada número)
+- [ ] Endurecer mais o yfinance: **cache leve com TTL** (dedupe + alívio de rate-limit) e **proveniência por campo** (de onde veio cada número) — o retry/backoff já está feito
+- [ ] Melhorar `had_cut`/streak de dividendos: ignorar dividendos especiais e timing de pagamento (4 vs 5 ex-dates/ano) que hoje marca `had_cut=True` falso (visto em AAPL e MSFT)
 - [ ] Próximas tools de aprofundamento por símbolo (v1/v2): `valuation_history`, `quality_metrics`, `technicals`, `price_history`
 - [ ] Adapter SEC EDGAR (`filings`) — fonte primária/autoritativa p/ cruzar com yfinance (precisa `SCOUT_SEC_USER_AGENT`)
 - [ ] Adapter FRED (`macro_context`)
@@ -23,3 +23,5 @@ Plano vivo do projeto. Tarefas e subtarefas, marcadas conforme concluídas.
 - [x] Scaffold do projeto espelhando o `mcp-ibkr-agent` (pyproject, hexagonal, CI, ruff/pytest, envelope `{ok,data}`)
 - [x] Fatia vertical yfinance → `company_snapshot`/`fundamentals`/`dividends` com `as_of`, 17 testes offline + live-validado
 - [x] Benchmark Claude Code (deep research) gerado: 3 relatórios em `benchmark/claude-code/`
+- [x] `company_dossier(symbol, depth, as_of)` — meta-tool com `asyncio.gather`, tolerante a falha parcial (`notes`), pacote `research/`; testes + live-validado (MSFT)
+- [x] Endurecer yfinance — retry/backoff contra rate-limit; falha transitória deixa de se disfarçar de "símbolo inexistente" (testado)

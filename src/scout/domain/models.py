@@ -91,3 +91,19 @@ class DividendHistory(BaseModel):
     )
     payments: list[DividendPayment] = []
     as_of: date | None = None
+
+
+class CompanyDossier(BaseModel):
+    """A consolidated, single-call portrait that fans several reads out in parallel.
+
+    The flagship "research many things about a company at once" tool: snapshot + fundamentals
+    + dividends gathered concurrently and returned together. ``notes`` carries any partial
+    failure (one source down) so the dossier degrades gracefully instead of failing whole.
+    """
+
+    symbol: str
+    as_of: date | None = None
+    snapshot: CompanySnapshot | None = None
+    fundamentals: Fundamentals | None = None
+    dividends: DividendHistory | None = None
+    notes: list[str] = []

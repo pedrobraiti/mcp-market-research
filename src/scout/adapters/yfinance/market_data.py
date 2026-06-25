@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import time
 from collections.abc import Callable
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -96,27 +97,57 @@ def _ratio(numerator: Decimal | None, denominator: Decimal | None, places: int) 
 
 
 class YFinanceMarketData:
-    def __init__(self, ticker_factory: Callable[[str], Any] | None = None) -> None:
+    def __init__(
+        self,
+        ticker_factory: Callable[[str], Any] | None = None,
+        retry_attempts: int = 3,
+        retry_base_delay: float = 0.5,
+    ) -> None:
         self._ticker_factory = ticker_factory or _default_ticker_factory
+        self._retry_attempts = max(1, retry_attempts)
+        self._retry_base_delay = retry_base_delay
 
     # ---- public async API (the port) -------------------------------------------------
 
     async def get_snapshot(
         self, symbol: str, as_of: date | None = None
     ) -> CompanySnapshot | None:
-        return await asyncio.to_thread(self._snapshot_sync, symbol.strip().upper(), as_of)
+        return await asyncio.to_thread(
+            self._retrying, self._snapshot_sync, symbol.strip().upper(), as_of
+        )
 
     async def get_fundamentals(
         self, symbol: str, period: Period = Period.ANNUAL, as_of: date | None = None
     ) -> Fundamentals | None:
         return await asyncio.to_thread(
-            self._fundamentals_sync, symbol.strip().upper(), period, as_of
+            self._retrying, self._fundamentals_sync, symbol.strip().upper(), period, as_of
         )
 
     async def get_dividends(
         self, symbol: str, as_of: date | None = None
     ) -> DividendHistory | None:
-        return await asyncio.to_thread(self._dividends_sync, symbol.strip().upper(), as_of)
+        return await asyncio.to_thread(
+            self._retrying, self._dividends_sync, symbol.strip().upper(), as_of
+        )
+
+    def _retrying(self, func: Callable[..., Any], *args: Any) -> Any:
+        """Call a blocking fetch, retrying transient failures with exponential backoff.
+
+        yfinance scrapes Yahoo and is rate-limited; a transient error should NOT look like a
+        missing symbol. So a network/HTTP failure is retried, and only a persistent failure
+        propagates (surfaced as an error envelope) — a genuinely unresolved symbol still
+        returns ``None`` without raising.
+        """
+        last_error: Exception | None = None
+        for attempt in range(self._retry_attempts):
+            try:
+                return func(*args)
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                if attempt < self._retry_attempts - 1 and self._retry_base_delay > 0:
+                    time.sleep(self._retry_base_delay * (2**attempt))
+        assert last_error is not None
+        raise last_error
 
     # ---- blocking implementations ----------------------------------------------------
 
@@ -260,10 +291,10 @@ class YFinanceMarketData:
 
 
 def _info(ticker: Any) -> dict:
-    try:
-        info = ticker.info
-    except Exception:  # noqa: BLE001
-        return {}
+    # Deliberately does NOT swallow exceptions: a transient/HTTP error must propagate so the
+    # retry wrapper can back off (instead of masquerading as an unresolved symbol). A symbol
+    # that simply has no data returns a non-dict/empty payload, which becomes {} → unresolved.
+    info = ticker.info
     return info if isinstance(info, dict) else {}
 
 

@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 import pandas as pd
+import pytest
 
 from scout.adapters.yfinance import YFinanceMarketData
 
@@ -89,6 +90,24 @@ class EmptyTicker:
         return pd.DataFrame()
 
 
+class FlakyTicker:
+    """Raises on `.info` the first ``fail_times`` accesses, then succeeds — to test retry."""
+
+    fail_times = 2
+    accesses = {"n": 0}
+
+    def __init__(self, symbol: str) -> None:
+        self.symbol = symbol
+        self.dividends = _DIVIDENDS
+
+    @property
+    def info(self):
+        FlakyTicker.accesses["n"] += 1
+        if FlakyTicker.accesses["n"] <= FlakyTicker.fail_times:
+            raise RuntimeError("rate limited")
+        return _INFO
+
+
 def _source():
     return YFinanceMarketData(ticker_factory=FakeTicker)
 
@@ -153,3 +172,21 @@ async def test_dividends_as_of_filters_and_recomputes():
     assert history.trailing_12m == Decimal("0.23")
     # Only one complete prior year (2021) remains, so a streak can't be established.
     assert history.growth_streak_years is None
+
+
+async def test_retry_recovers_from_transient_failure():
+    FlakyTicker.accesses["n"] = 0
+    FlakyTicker.fail_times = 2
+    source = YFinanceMarketData(ticker_factory=FlakyTicker, retry_attempts=3, retry_base_delay=0)
+    snapshot = await source.get_snapshot("AAPL")
+    assert snapshot is not None
+    assert snapshot.price == Decimal("230.0")
+    assert FlakyTicker.accesses["n"] == 3  # failed twice, succeeded on the third
+
+
+async def test_retry_gives_up_and_raises_after_exhaustion():
+    FlakyTicker.accesses["n"] = 0
+    FlakyTicker.fail_times = 99
+    source = YFinanceMarketData(ticker_factory=FlakyTicker, retry_attempts=2, retry_base_delay=0)
+    with pytest.raises(RuntimeError, match="rate limited"):
+        await source.get_snapshot("AAPL")

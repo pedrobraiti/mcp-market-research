@@ -14,6 +14,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from ..domain.models import Period
+from ..research import build_dossier
 from .services import Services, build_services
 
 _services: Services | None = None
@@ -42,6 +43,28 @@ def _parse_as_of(as_of: str | None) -> date | None:
     if as_of is None or not as_of.strip():
         return None
     return datetime.strptime(as_of.strip(), "%Y-%m-%d").date()
+
+
+@mcp.tool()
+async def company_dossier(symbol: str, depth: str = "full", as_of: str | None = None) -> dict:
+    """Consolidated one-call research dossier for a US stock/ETF — the flagship tool.
+
+    Fans several reads out in parallel and returns them together: a `snapshot`, plus (when
+    `depth="full"`, the default) `fundamentals` and `dividends`. Use `depth="summary"` for a
+    quick snapshot-only read. Pass `as_of` (YYYY-MM-DD) for a point-in-time view. If one source
+    is momentarily unavailable the dossier still returns, with the gap recorded in `notes` —
+    prefer this over calling the individual tools when you want the full picture at once.
+    """
+    svc = services()
+    try:
+        dossier = await build_dossier(
+            svc.market_data, symbol, depth.strip().lower(), _parse_as_of(as_of)
+        )
+        return _ok(dossier.model_dump(mode="json"))
+    except ValueError as exc:
+        return _err(exc)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
 
 
 @mcp.tool()

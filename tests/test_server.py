@@ -65,6 +65,23 @@ async def test_dividends_envelope(use_source):
     assert result["data"]["growth_streak_years"] == 10
 
 
+async def test_company_dossier_envelope(use_source):
+    use_source(FakeSource())
+    result = await app_module.company_dossier("aapl")
+    assert result["ok"] is True
+    assert result["data"]["symbol"] == "AAPL"
+    assert result["data"]["snapshot"]["price"] == "100"
+    assert result["data"]["fundamentals"] is not None
+    assert result["data"]["notes"] == []
+
+
+async def test_company_dossier_rejects_bad_depth(use_source):
+    use_source(FakeSource())
+    result = await app_module.company_dossier("aapl", depth="everything")
+    assert result["ok"] is False
+    assert "depth" in result["error"]
+
+
 async def test_tool_surfaces_error_as_envelope(use_source):
     use_source(BrokenSource())
     result = await app_module.company_snapshot("aapl")
