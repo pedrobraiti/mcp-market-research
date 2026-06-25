@@ -35,3 +35,14 @@ Registro de decisões com o "porquê". Append-only — não edita entradas antig
 ## 2026-06-25 — Pesquisa narrativa (web) sem API paga; medir antes de confiar
 **Motivo:** O grosso da precisão vem de **dado estruturado** (determinístico, grátis), não de web search. Para a parte narrativa (notícias/sentimento/teses), experimentar o `deep-research`/Workflow (subagentes) do Claude Code; fallback é o Claude entregar um prompt pronto pro usuário rodar no claude.ai web (que historicamente entregou relatórios superiores ao WebSearch cru). Decidir por **benchmark empírico**, não por promessa.
 **Alternativas consideradas:** API da Anthropic com web search nativo — adiado: é paga. Automação de navegador dirigindo o claude.ai — rejeitado: frágil demais pra produção.
+
+## 2026-06-25 — Princípios de design das tools (brainstorm multi-agente)
+**Motivo:** Brainstorm com 5 subagentes (personas de usuário) em 2 rodadas (ideação + debate cruzado) convergiu numa "constituição" do Scout. Detalhe completo em `docs/tool-brainstorm.md`.
+- **P1 — Stateless por design.** Memória de tese/watchlist/alertas = estado de decisão do usuário → mora na **skill/camada de memória**, NUNCA no Scout. MCP de dados ser stateless é feature (mesma pergunta → mesmo mundo, sem 2ª fonte de verdade competindo com a skill).
+- **P2 — `as_of` (point-in-time) em toda tool de research.** Comparação temporal ("entrada vs. agora") vira composição de 2 leituras stateless; dissolve a necessidade de estado. A skill guarda a data; o Scout só lê o snapshot. Assinaturas nascem com `as_of` opcional.
+- **P3 — A tool CALCULA, não CONCLUI.** Dado + régua explícita, nunca veredito embutido. Limiares vêm do caller (ou Scout devolve valor cru + régua). Mantém tudo como sentido, não julgamento.
+- **P4 — Camada de evidência com proveniência, não curadoria opinativa.** Tools temáticas/macro entregam associações verificáveis + sensibilidades estatísticas com a evidência anexa; a IA conclui. Output não-auditável = opinião = não é Scout.
+- **P5 — Lote first-class só quando a saída é agregada/filtrada** (correlação, digest, "só o que acendeu"). "Mesmo dado N vezes" fica por-símbolo. Scanner market-first (recebe escopo) ≠ batch-of-symbols (recebe lista).
+- **P6 — Meta-tools gordas OK enquanto só agregam dados** (dossier, risk_readout). Linha vermelha: descrever risco sim, recomendar ação/sizing não.
+- **P7 — Nomenclatura sem vocabulário de execução.** `pre_trade_brief`→`risk_readout`; `position_diff`→`changes_since`; detecção stateless usa sufixo `_check`, nunca `_watch`.
+**Alternativas consideradas:** Memória de tese DENTRO do Scout (defendida na rodada 1 pelo fluxo-conjunto) — rejeitada no debate: vira 2ª fonte de verdade stateful e invade a skill. Tools com veredito embutido (valuation_estimate→"preço justo", thesis_review→"saia", macro_to_sectors→"quem ganha") — rejeitadas/reformuladas: terceirizam o julgamento da IA pra dentro da tool.

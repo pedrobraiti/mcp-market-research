@@ -3,21 +3,23 @@
 Plano vivo do projeto. Tarefas e subtarefas, marcadas conforme concluídas.
 
 ## Em progresso
-- [ ] Desenhar a superfície de tools do MCP (lista, assinaturas, formato de retorno) — **depende de decisões abertas** (ver `handoff.md`)
+- [ ] **Decisões abertas com o usuário** (bloqueiam o corte final do v1) — ver `docs/tool-brainstorm.md` §Decisões abertas: (1) memória de tese mora na skill, não no Scout? (2) travar corte v1 (~12 tools); (3) `as_of` em todas as assinaturas; (4) narrativa/web.
 
-## Próximas
+## Próximas (pós-decisão)
+- [ ] Travar a superfície v1 a partir do `docs/tool-brainstorm.md` (assinaturas + envelope `{ok, data}` + `as_of` opcional)
 - [ ] Decidir stack base: FastMCP + libs de dados (yfinance, sec-edgar/`requests`, fredapi/`requests`)
-- [ ] Scaffold Python: `pyproject.toml`, venv, layout hexagonal (`domain/`, `adapters/`, `server/`), CI (ruff+pytest) espelhando o padrão do `mcp-ibkr-agent`
-- [ ] Definir `domain/` — models (Dossier, Fundamentals, Technicals, Filing, MacroSnapshot…) e ports (MarketDataSource, FilingsSource, MacroSource…)
-- [ ] Primeiro adapter vertical de ponta a ponta: yfinance → `company_snapshot(symbol)` (preço + fundamentos básicos), com testes
-- [ ] Tool consolidada `company_dossier(symbol, depth)` com paralelismo interno (`asyncio.gather`)
-- [ ] Adapter SEC EDGAR (filings 10-K/10-Q/8-K) e tool `filings(symbol, type)`
-- [ ] Adapter FRED (macro) e tool `macro_context()`
-- [ ] Camada narrativa: tool/skill de research que usa `deep-research`/Workflow + fallback de prompt pro claude.ai web
-- [ ] Skill de estratégia `/analyze` (só pesquisa) e `/invest` (pesquisa→decide→executa via Valet), com os dois modos (confirmação/autonomia)
-- [ ] Memória de tese: registrar a tese na compra, revisitar na venda (journaling auditável)
+- [ ] Scaffold Python: `pyproject.toml`, venv, layout hexagonal (`domain/`, `adapters/`, `server/`), CI (ruff+pytest) espelhando o `mcp-ibkr-agent`
+- [ ] Definir `domain/` — models e ports (MarketDataSource, FilingsSource, MacroSource…), com `as_of` no contrato
+- [ ] **Fatia vertical** (independente das decisões): yfinance → `company_snapshot`, `fundamentals`, `dividends` (dado puro, v1 unânime), com testes
+- [ ] Tool consolidada `company_dossier(symbol, depth, as_of)` com paralelismo interno (`asyncio.gather`)
+- [ ] Adapter SEC EDGAR (`filings`) e adapter FRED (`macro_context`)
+- [ ] Tools de descoberta v1: `screen` (com critérios técnicos), `peers`, `compare`
+- [ ] Tools de lote v1 (stateless): `watch_signals`, `news_digest`, `calendar`
+- [ ] Camada narrativa: `deep-research`/Workflow + fallback de prompt pro claude.ai web (decidir por benchmark)
+- [ ] (Workstream da skill, NÃO do Scout) Skill de estratégia `/analyze` e `/invest` com os 2 modos + **camada de memória de tese** (escreve a tese; passa pro Scout verificar stateless)
 - [ ] README profissional em inglês + banner, no padrão do `mcp-ibkr-agent`
 
 ## Concluído
 - [x] Setup inicial do projeto (`.claude/`, git, estrutura de memória)
 - [x] Definir conceito e fronteira: MCP de dados ("Scout") separado do Valet, Claude Code como cérebro
+- [x] Brainstorm multi-agente de tools/casos de uso (2 rodadas, 5 personas) → `docs/tool-brainstorm.md` + ADR dos 7 princípios de design
