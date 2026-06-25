@@ -9,7 +9,7 @@ Plano vivo do projeto. Tarefas e subtarefas, marcadas conforme concluídas.
 - [ ] Endurecer mais o yfinance: **cache leve com TTL** (dedupe + alívio de rate-limit) e **proveniência por campo** (de onde veio cada número) — o retry/backoff já está feito
 - [ ] Melhorar `had_cut`/streak de dividendos: ignorar dividendos especiais e timing de pagamento (4 vs 5 ex-dates/ano) que hoje marca `had_cut=True` falso (visto em AAPL e MSFT)
 - [ ] Próximas tools de aprofundamento por símbolo (v1/v2): `valuation_history`, `quality_metrics`, `technicals`, `price_history`
-- [ ] Adapter SEC EDGAR (`filings`) — fonte primária/autoritativa p/ cruzar com yfinance (precisa `SCOUT_SEC_USER_AGENT`)
+- [ ] **SEC EDGAR — fase 2: cross-check de fundamentos via XBRL** (`companyfacts`/`companyconcept`) pra confrontar receita/lucro/etc. com o yfinance (a fonte autoritativa que ataca a fragilidade do yfinance)
 - [ ] Adapter FRED (`macro_context`)
 - [ ] Tools de descoberta v1: `screen` (com critérios técnicos), `peers`, `compare`
 - [ ] Tools de lote v1 (stateless): `watch_signals`, `news_digest`, `calendar`
@@ -25,3 +25,4 @@ Plano vivo do projeto. Tarefas e subtarefas, marcadas conforme concluídas.
 - [x] Benchmark Claude Code (deep research) gerado: 3 relatórios em `benchmark/claude-code/`
 - [x] `company_dossier(symbol, depth, as_of)` — meta-tool com `asyncio.gather`, tolerante a falha parcial (`notes`), pacote `research/`; testes + live-validado (MSFT)
 - [x] Endurecer yfinance — retry/backoff contra rate-limit; falha transitória deixa de se disfarçar de "símbolo inexistente" (testado)
+- [x] Adapter SEC EDGAR + tool `filings` (resolução de CIK, API oficial, `fetch_json` injetável); testes offline + live-validado (10-Ks reais da AAPL)

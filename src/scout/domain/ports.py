@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Protocol, runtime_checkable
 
-from .models import CompanySnapshot, DividendHistory, Fundamentals, Period
+from .models import CompanySnapshot, DividendHistory, FilingsList, Fundamentals, Period
 
 
 @runtime_checkable
@@ -34,4 +34,19 @@ class MarketDataSource(Protocol):
         self, symbol: str, as_of: date | None = None
     ) -> DividendHistory | None:
         """Dividend history, trailing yield, growth streak and cut flag up to ``as_of``."""
+        ...
+
+
+@runtime_checkable
+class FilingsSource(Protocol):
+    """Reads of regulatory filings (SEC EDGAR today)."""
+
+    async def get_filings(
+        self,
+        symbol: str,
+        form_type: str | None = None,
+        limit: int = 20,
+        as_of: date | None = None,
+    ) -> FilingsList | None:
+        """Recent filings, optionally restricted to ``form_type`` and dated at/before ``as_of``."""
         ...

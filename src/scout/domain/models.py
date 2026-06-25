@@ -107,3 +107,24 @@ class CompanyDossier(BaseModel):
     fundamentals: Fundamentals | None = None
     dividends: DividendHistory | None = None
     notes: list[str] = []
+
+
+class Filing(BaseModel):
+    """A single SEC filing (10-K, 10-Q, 8-K, ...) with a link to the primary document."""
+
+    form: str
+    filing_date: date
+    report_date: date | None = None
+    accession: str
+    primary_document: str | None = None
+    description: str | None = None
+    url: str | None = None
+
+
+class FilingsList(BaseModel):
+    """Recent SEC EDGAR filings for a company — authoritative, straight from the source."""
+
+    symbol: str
+    cik: str | None = None
+    name: str | None = None
+    filings: list[Filing] = []

@@ -28,9 +28,11 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 
 ## Tools (today)
 
+- `company_dossier(symbol, depth?, as_of?)` — flagship: snapshot + fundamentals + dividends gathered **in parallel**, degrades gracefully if one source is down.
 - `company_snapshot(symbol, as_of?)` — price, day move, key multiples, sector/industry.
 - `fundamentals(symbol, period?, as_of?)` — income/balance/cash-flow figures + derived margins.
 - `dividends(symbol, as_of?)` — payment history, trailing yield, growth streak, cut flag.
+- `filings(symbol, form_type?, limit?, as_of?)` — recent **SEC EDGAR** filings (10-K/10-Q/8-K …) with links to the primary document (authoritative source; needs `SCOUT_SEC_USER_AGENT`).
 
 Every tool returns an `{"ok": ..., "data": ...}` envelope and accepts an optional `as_of`
 (point-in-time) so the agent can compose two stateless reads into a "what changed since" diff.
@@ -40,8 +42,9 @@ Every tool returns an `{"ok": ..., "data": ...}` envelope and accepts an optiona
 Hexagonal (ports & adapters), mirroring `mcp-ibkr-agent`: the agent talks only to the MCP tools; each data source is a swappable adapter behind a port, so a free source can be replaced or complemented by another without touching the domain.
 
 ```
-domain/      models (CompanySnapshot, Fundamentals, DividendHistory, ...) and ports (data sources)
-adapters/    yfinance (today); SEC EDGAR, FRED, ... next — one adapter per source
+domain/      models (CompanySnapshot, Fundamentals, DividendHistory, FilingsList, ...) and ports
+adapters/    yfinance + SEC EDGAR (today); FRED, stooq, ... next — one adapter per source
+research/    meta-tools that fan several ports out in parallel (company_dossier)
 server/      MCP server (FastMCP) + dependency composition
 ```
 

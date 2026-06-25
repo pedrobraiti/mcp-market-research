@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.3",
     "python-dotenv>=1.0",
     "yfinance>=0.2.40",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]

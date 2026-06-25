@@ -3,8 +3,15 @@ from decimal import Decimal
 
 import pytest
 
-from scout.config import get_settings
-from scout.domain.models import CompanySnapshot, DividendHistory, Fundamentals, Period
+from scout.config import Settings, get_settings
+from scout.domain.models import (
+    CompanySnapshot,
+    DividendHistory,
+    Filing,
+    FilingsList,
+    Fundamentals,
+    Period,
+)
 from scout.server import app as app_module
 from scout.server.services import Services
 
@@ -25,12 +32,23 @@ class BrokenSource(FakeSource):
         raise RuntimeError("data source down")
 
 
+class FakeFilings:
+    async def get_filings(self, symbol, form_type=None, limit=20, as_of=None):
+        return FilingsList(
+            symbol=symbol.upper(),
+            cik="0000320193",
+            filings=[Filing(form="10-K", filing_date=date(2024, 11, 1), accession="x")],
+        )
+
+
 @pytest.fixture
 def use_source():
     previous = app_module._services
 
-    def _install(source):
-        app_module._services = Services(settings=get_settings(), market_data=source)
+    def _install(source, filings=None, settings=None):
+        app_module._services = Services(
+            settings=settings or get_settings(), market_data=source, filings=filings
+        )
 
     yield _install
     app_module._services = previous
@@ -87,6 +105,25 @@ async def test_tool_surfaces_error_as_envelope(use_source):
     result = await app_module.company_snapshot("aapl")
     assert result["ok"] is False
     assert "data source down" in result["error"]
+
+
+async def test_filings_requires_user_agent(use_source):
+    use_source(FakeSource(), filings=FakeFilings())  # default settings → blank UA
+    result = await app_module.filings("AAPL")
+    assert result["ok"] is False
+    assert "SCOUT_SEC_USER_AGENT" in result["error"]
+
+
+async def test_filings_returns_data_when_configured(use_source):
+    use_source(
+        FakeSource(),
+        filings=FakeFilings(),
+        settings=Settings(sec_user_agent="Scout Test test@example.com"),
+    )
+    result = await app_module.filings("aapl", form_type="10-K")
+    assert result["ok"] is True
+    assert result["data"]["cik"] == "0000320193"
+    assert result["data"]["filings"][0]["form"] == "10-K"
 
 
 def test_parse_as_of_handles_blank_and_value():

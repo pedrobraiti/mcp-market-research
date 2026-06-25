@@ -4,16 +4,16 @@
 > de forma relativamente detalhada. É o PRIMEIRO arquivo que a próxima sessão lê.
 > Mantenha-o vivo e específico — detalhado o bastante para retomar sem reconstruir o raciocínio.
 
-**Última atualização:** 2026-06-25 — dossiê + endurecimento yfinance + benchmark gerado
+**Última atualização:** 2026-06-25 — adapter SEC EDGAR + tool filings (5 tools no total)
 
 ## Onde parei
-O projeto **Scout** (`mcp-market-research`, público em `pedrobraiti/mcp-market-research`) tem **código rodando**: scaffold espelhando o `mcp-ibkr-agent` (Valet) + **4 tools** funcionando (yfinance), com **26 testes offline** passando, ruff limpo e **validado ao vivo** (AAPL e MSFT retornam dados reais). Rodei o **lado Claude Code do benchmark** (3 relatórios em `benchmark/claude-code/`).
+O projeto **Scout** (`mcp-market-research`, público em `pedrobraiti/mcp-market-research`) tem **código rodando**: scaffold espelhando o `mcp-ibkr-agent` (Valet) + **5 tools**, com **33 testes offline** passando, ruff limpo e **validado ao vivo** (yfinance: AAPL/MSFT; SEC EDGAR: 10-Ks reais da AAPL). Rodei o **lado Claude Code do benchmark** (3 relatórios em `benchmark/claude-code/`).
 
-**Aguardando o usuário** rodar os 3 prompts do `benchmark/PROMPTS-FOR-CLAUDE-WEB.md` no claude.ai web e salvar em `benchmark/claude-web/` — ele DISSE que está fazendo isso agora. Quando trouxer, eu comparo os dois lados e decidimos a camada narrativa.
+**Aguardando o usuário** rodar os 3 prompts do `benchmark/PROMPTS-FOR-CLAUDE-WEB.md` no claude.ai web e salvar em `benchmark/claude-web/` — o deep research dele ainda está rodando; ele avisa quando terminar e jogar os markdowns na pasta. Aí eu comparo os dois lados e decidimos a camada narrativa.
 
 ## O que já está implementado (não refazer)
-- `src/scout/` layout hexagonal: `config.py` (pydantic-settings, prefixo `SCOUT_`), `domain/models.py` (CompanySnapshot, Fundamentals, DividendHistory, **CompanyDossier** — Decimal, com `as_of`), `domain/ports.py` (`MarketDataSource`, métodos com `as_of`), `adapters/yfinance/market_data.py` (parsing defensivo, `asyncio.to_thread`, import lazy, factory injetável, **retry/backoff** configurável), `research/dossier.py` (`build_dossier`, `asyncio.gather`, tolerante a falha parcial → `notes`), `server/services.py` e `server/app.py` (FastMCP, envelope `{ok,data}`, **4 tools**). `healthcheck.py`.
-- Tools: `company_dossier(depth)`, `company_snapshot`, `fundamentals(period)`, `dividends` — todas com `as_of` opcional (ISO).
+- `src/scout/` layout hexagonal: `config.py` (pydantic-settings, prefixo `SCOUT_`), `domain/models.py` (CompanySnapshot, Fundamentals, DividendHistory, CompanyDossier, Filing/FilingsList — Decimal, com `as_of`), `domain/ports.py` (`MarketDataSource` e `FilingsSource`, com `as_of`), `adapters/yfinance/market_data.py` (parsing defensivo, `asyncio.to_thread`, import lazy, factory injetável, **retry/backoff**), `adapters/sec/edgar.py` (resolução de CIK via `company_tickers.json` cacheada, submissions API, `fetch_json` injetável, UA da SEC), `research/dossier.py` (`build_dossier`, `asyncio.gather`, tolerante a falha → `notes`), `server/services.py` (compõe yfinance + SEC) e `server/app.py` (FastMCP, envelope `{ok,data}`, **5 tools**). `healthcheck.py`.
+- Tools: `company_dossier(depth)`, `company_snapshot`, `fundamentals(period)`, `dividends`, `filings(form_type, limit)` — todas com `as_of` opcional (ISO). `filings` exige `SCOUT_SEC_USER_AGENT`.
 - Decisões de design aplicadas: stateless, `as_of`, dado puro (sem veredito), valores derivados quantizados, streak/cut só por anos consecutivos, retry deixa falha transitória de se disfarçar de "símbolo inexistente".
 - CI em `.github/workflows/ci.yml` (ruff+pytest, branch `master`).
 

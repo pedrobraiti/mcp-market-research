@@ -123,6 +123,34 @@ async def dividends(symbol: str, as_of: str | None = None) -> dict:
         return _err(exc)
 
 
+@mcp.tool()
+async def filings(
+    symbol: str, form_type: str | None = None, limit: int = 20, as_of: str | None = None
+) -> dict:
+    """Recent SEC EDGAR filings for a US company — authoritative, straight from the source.
+
+    Returns each filing's form (e.g. "10-K", "10-Q", "8-K"), filing & report dates, accession
+    number and a link to the primary document. Pass `form_type` to filter (e.g. "10-K") and
+    `as_of` (YYYY-MM-DD) to see only filings up to a past date. Use this to read primary sources
+    and to cross-check figures from other tools. `data` is null if the symbol can't be resolved.
+
+    Requires the SCOUT_SEC_USER_AGENT env var (SEC policy: an identifiable User-Agent).
+    """
+    svc = services()
+    if svc.filings is None or not svc.settings.sec_user_agent.strip():
+        return _err(
+            ValueError(
+                "Set SCOUT_SEC_USER_AGENT (e.g. 'Your Name you@email.com') — SEC EDGAR "
+                "requires an identifiable User-Agent."
+            )
+        )
+    try:
+        result = await svc.filings.get_filings(symbol, form_type, int(limit), _parse_as_of(as_of))
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
 def main() -> None:
     mcp.run()
 
