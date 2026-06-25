@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Secrets / env
+.env
+
+# Logs / data caches
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Memória do projeto: marcador do hook (o resto de .claude/ É versionado)
+.claude/.last-stop-signature
