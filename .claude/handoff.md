@@ -4,31 +4,28 @@
 > de forma relativamente detalhada. É o PRIMEIRO arquivo que a próxima sessão lê.
 > Mantenha-o vivo e específico — detalhado o bastante para retomar sem reconstruir o raciocínio.
 
-**Última atualização:** 2026-06-25 — fim do brainstorm multi-agente de tools
+**Última atualização:** 2026-06-25 — fatia vertical pronta + benchmark gerado
 
 ## Onde parei
-Setup feito e repo público no ar (`pedrobraiti/mcp-market-research`, nome amigável **Scout**). Em seguida conduzi um **brainstorm multi-agente** (5 subagentes sob personas de usuário, 2 rodadas: ideação + debate cruzado em que eles "conversaram"). Resultado consolidado em **`docs/tool-brainstorm.md`** e os 7 princípios de design viraram ADR em `decisions.md`. Entreguei o digest ao usuário e estou **aguardando 4 decisões abertas** dele (ver fim de `docs/tool-brainstorm.md`) antes de travar o corte v1 das tools. Ainda **não há código Python**.
+O projeto **Scout** (`mcp-market-research`, público em `pedrobraiti/mcp-market-research`) saiu do papel. Já existe **código rodando**: scaffold completo espelhando o `mcp-ibkr-agent` (Valet) + a primeira **fatia vertical** funcionando (yfinance → 3 tools), com 17 testes offline passando, ruff limpo e **validado ao vivo** (`scout.healthcheck AAPL` retorna preço/PE/dividendos reais). Também rodei o **lado Claude Code do benchmark** de pesquisa (3 relatórios em `benchmark/claude-code/`).
 
-## Resultado-chave do brainstorm (não reabrir sem motivo)
-O debate convergiu forte. Constituição do Scout (7 princípios, no ADR): **stateless por design**; **`as_of` point-in-time em toda tool** (dissolve a necessidade de estado); **tool calcula, não conclui** (dado + régua, nunca veredito); **camada de evidência com proveniência** (não curadoria opinativa); **lote só quando a saída é agregada**; **meta-tools gordas só agregam, não recomendam**; **nomes sem vocabulário de execução**. Decisão grande: **memória de tese/watchlist/alertas SAI do Scout → mora na skill de estratégia**; o Scout só verifica stateless (recebe a tese + a data como argumento). Superfície dividida em v1 (~12 tools núcleo) e v2; lista completa na tabela de `docs/tool-brainstorm.md`.
+**Aguardando o usuário** rodar os 3 prompts do `benchmark/PROMPTS-FOR-CLAUDE-WEB.md` no claude.ai web e salvar em `benchmark/claude-web/` — aí eu comparo os dois lados e decidimos a camada narrativa.
 
-## Contexto mental
-Este é o **segundo MCP** de um ecossistema de trading agêntico do usuário (Pedro). O primeiro, `mcp-ibkr-agent` ("Valet"), é a **execução** na Interactive Brokers — já existe, open source, validado live. Este aqui ("Scout") é o **data/info gathering**: os sentidos. O **cérebro é o próprio Claude Code** — ele raciocina e decide; a estratégia de decisão mora numa **skill** (`/analyze`, `/invest`), não em código. Por isso a forma é um **MCP server** (function calling nativo), não um programa standalone (que precisaria de API paga e reimplementaria o loop agêntico).
-
-Princípios já decididos (ver `decisions.md`): tools **gordas e com propósito** (ex.: `company_dossier(symbol)` com `asyncio.gather` interno) em vez de dezenas de tools micro; **dados grátis primeiro** (yfinance, SEC EDGAR, FRED, stooq) atrás de **adapters plugáveis** (hexagonal, igual Valet); universo limitado ao **que a IBKR negocia** (ações/ETFs US) por ora; **dois modos** (confirmação por default pra público, autonomia pro dono) — orquestrados pela skill; pesquisa narrativa via `deep-research`/Workflow com fallback de prompt pro claude.ai web, **sem API paga**.
+## O que já está implementado (não refazer)
+- `src/scout/` layout hexagonal: `config.py` (pydantic-settings, prefixo `SCOUT_`), `domain/models.py` (CompanySnapshot, Fundamentals, DividendHistory — Decimal, com `as_of`), `domain/ports.py` (`MarketDataSource`, métodos com `as_of`), `adapters/yfinance/market_data.py` (parsing defensivo, `asyncio.to_thread`, import lazy do yfinance, factory injetável p/ testes offline), `server/services.py` (composição) e `server/app.py` (FastMCP, envelope `{ok,data}`, 3 tools). `healthcheck.py` (smoke test ao vivo).
+- Tools: `company_snapshot`, `fundamentals(period)`, `dividends` — todas com `as_of` opcional (ISO).
+- Decisões de design aplicadas: stateless, `as_of`, dado puro (sem veredito), valores derivados quantizados, streak/cut só por anos consecutivos (corrigido o bug que inflava streak atravessando o buraco de dividendos da Apple 1996–2012).
+- CI em `.github/workflows/ci.yml` (ruff+pytest, branch `master`).
 
 ## Próximo passo concreto
-Aguardar as **4 decisões abertas** do usuário (§Decisões abertas em `docs/tool-brainstorm.md`): (1) memória de tese na skill e não no Scout; (2) travar corte v1; (3) `as_of` em todas as assinaturas; (4) narrativa/web. Assim que ele responder, **travar a superfície v1** e começar o scaffold + a fatia vertical (yfinance → `company_snapshot`/`fundamentals`/`dividends`, que é independente das decisões e pode até começar antes).
+Quando o usuário trouxer os relatórios do claude.ai web: comparar os 3 pares (profundidade, precisão, fontes, tratamento de incerteza) e registrar a conclusão (decide a camada narrativa). Em paralelo / se quiser avançar código: `company_dossier` (agrega as 3 tools via `asyncio.gather`) e endurecer o yfinance (cache + retry/backoff + proveniência por campo). Ver `todo.md`.
 
 ## Em aberto / armadilhas
-Decisões que faltam o usuário fechar antes do desenho fino das tools:
-1. **Profundidade/forma das tools** — confirmar a abordagem "poucas tools gordas" e quais dossiês fazem sentido (snapshot rápido vs dossiê completo vs comparação).
-2. **Como nomear o nome amigável** — escolhi "Scout"; usuário pode trocar antes do push.
-3. **Estilo de investimento alvo** — o usuário pediu "preparado pra TODOS os cenários e objetivos", então o dossiê precisa cobrir fundamentos+técnicos+macro+filings de forma genérica (não otimizar pra um estilo só). Isso amplia o escopo de dados — cuidar pra não virar over-engineering no MVP; entregar um **adapter vertical** (yfinance → snapshot) primeiro e crescer.
-
-Armadilhas técnicas conhecidas (do Valet, valem aqui): rate limits de fontes grátis (yfinance/SEC têm limites); SEC EDGAR **exige header `User-Agent` identificável**; cuidar de cache pra não estourar limites; manter **zero segredo** versionado (repo público).
+- **Limitações do yfinance (ponto levantado pelo usuário):** é scraper não-oficial do Yahoo — pode quebrar quando o Yahoo muda, tem rate limit, `.info` é pesado e às vezes incompleto, e fundamentos históricos/point-in-time são limitados. Plano (não é "trocar", é "complementar"): manter yfinance como fonte default mas, sendo hexagonal, **cruzar com SEC EDGAR** (fundamentos autoritativos), **FRED** (macro) e **stooq** (preço fallback), e expor **proveniência por campo**. O `as_of` já nasce no contrato mas hoje só é honrado de fato para preço (history) e dividendos (filtro); fundamentos point-in-time dependem do que a fonte dá.
+- **Nuance dividendos:** `had_cut` pode dar True por timing de pagamentos (anos com 4 vs 5 ex-dates) mesmo sem corte real do valor por ação — documentar/refinar depois (contar trailing-4 ou taxa por ação).
+- **Benchmark macro:** o relatório de macro do agente construiu um cenário 2026 bastante específico/especulativo (choque geopolítico) — pesquisa sobre futuro/recente pode alucinar; avaliar como cada lado lida com incerteza É parte do teste.
 
 ## Como retomar rápido
-- Leia `context.md` (macro), `decisions.md` (porquês), este arquivo, e rode `git log --oneline -20`.
-- Referência de padrão de qualidade/arquitetura: `C:\Users\ACS Gamer\Documents\vscode-local\agentic-trading` (o Valet) — espelhar layout hexagonal, envelope de retorno, estilo de README/ADR, CI (ruff+pytest).
-- Comandos: ainda não há venv/código. Primeiro passo de build será `python -m venv .venv` + `pyproject.toml`.
+- `& ".venv\Scripts\python.exe" -m pytest -q` (17 testes), `ruff check .`, `python -m scout.healthcheck AAPL`.
+- Referência de padrão: `C:\Users\ACS Gamer\Documents\vscode-local\agentic-trading` (Valet).
+- Superfície de tools planejada + princípios: `docs/tool-brainstorm.md` e ADR em `.claude/decisions.md` (2026-06-25).

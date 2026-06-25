@@ -1,0 +1,37 @@
+"""Domain ports (interfaces) — contracts that concrete adapters implement.
+
+Async ``Protocol``s: a data source (yfinance today; SEC EDGAR, FRED, a paid provider
+tomorrow) must satisfy these without explicit inheritance. Every method takes an optional
+``as_of`` so the same call can read the present or a past snapshot — the key to keeping
+Scout stateless while still serving "what changed since" questions.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Protocol, runtime_checkable
+
+from .models import CompanySnapshot, DividendHistory, Fundamentals, Period
+
+
+@runtime_checkable
+class MarketDataSource(Protocol):
+    """Reads of company-level market and fundamental data."""
+
+    async def get_snapshot(
+        self, symbol: str, as_of: date | None = None
+    ) -> CompanySnapshot | None:
+        """Price, day move and key multiples. ``None`` if the symbol can't be resolved."""
+        ...
+
+    async def get_fundamentals(
+        self, symbol: str, period: Period = Period.ANNUAL, as_of: date | None = None
+    ) -> Fundamentals | None:
+        """Income/balance/cash-flow figures for the latest period at or before ``as_of``."""
+        ...
+
+    async def get_dividends(
+        self, symbol: str, as_of: date | None = None
+    ) -> DividendHistory | None:
+        """Dividend history, trailing yield, growth streak and cut flag up to ``as_of``."""
+        ...
