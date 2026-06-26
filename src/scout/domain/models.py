@@ -128,3 +128,20 @@ class FilingsList(BaseModel):
     cik: str | None = None
     name: str | None = None
     filings: list[Filing] = []
+
+
+class ExtractedPage(BaseModel):
+    """A web page fetched and reduced to clean, token-efficient markdown.
+
+    A pure capture sense for the agent's own research: it picks the URL, this returns the main
+    content. It does NOT judge or summarize. ``fetched_ok=False`` (with a note) honestly reports
+    a paywall/anti-bot block rather than pretending — the kind of gap the benchmark exposed.
+    """
+
+    url: str
+    fetched_ok: bool
+    status_code: int | None = None
+    title: str | None = None
+    markdown: str | None = None
+    char_count: int | None = None
+    note: str | None = None

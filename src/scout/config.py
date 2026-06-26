@@ -28,8 +28,14 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     request_timeout_seconds: float = 15.0
 
-    # SEC EDGAR requires an identifiable User-Agent; used by the upcoming filings adapter.
+    # SEC EDGAR requires an identifiable User-Agent; used by the filings adapter.
     sec_user_agent: str = ""
+
+    # A browser-like User-Agent for the web `extract` tool (reduces trivial bot blocks).
+    web_user_agent: str = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    )
 
 
 @lru_cache

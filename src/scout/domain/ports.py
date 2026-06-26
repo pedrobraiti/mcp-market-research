@@ -11,7 +11,14 @@ from __future__ import annotations
 from datetime import date
 from typing import Protocol, runtime_checkable
 
-from .models import CompanySnapshot, DividendHistory, FilingsList, Fundamentals, Period
+from .models import (
+    CompanySnapshot,
+    DividendHistory,
+    ExtractedPage,
+    FilingsList,
+    Fundamentals,
+    Period,
+)
 
 
 @runtime_checkable
@@ -49,4 +56,14 @@ class FilingsSource(Protocol):
         as_of: date | None = None,
     ) -> FilingsList | None:
         """Recent filings, optionally restricted to ``form_type`` and dated at/before ``as_of``."""
+        ...
+
+
+@runtime_checkable
+class ContentExtractor(Protocol):
+    """Fetches a web page and returns its main content as clean markdown."""
+
+    async def extract(self, url: str) -> ExtractedPage:
+        """Fetch ``url`` and extract the main content. Always returns a result (with
+        ``fetched_ok=False`` and a note on a block/error), never raises for the agent."""
         ...

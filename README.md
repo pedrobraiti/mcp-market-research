@@ -33,6 +33,7 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `fundamentals(symbol, period?, as_of?)` — income/balance/cash-flow figures + derived margins.
 - `dividends(symbol, as_of?)` — payment history, trailing yield, growth streak, cut flag.
 - `filings(symbol, form_type?, limit?, as_of?)` — recent **SEC EDGAR** filings (10-K/10-Q/8-K …) with links to the primary document (authoritative source; needs `SCOUT_SEC_USER_AGENT`).
+- `extract(url)` — fetch a web page and return its **main content as clean markdown** (a research aid; honestly reports paywalls/blocks instead of faking).
 
 Every tool returns an `{"ok": ..., "data": ...}` envelope and accepts an optional `as_of`
 (point-in-time) so the agent can compose two stateless reads into a "what changed since" diff.

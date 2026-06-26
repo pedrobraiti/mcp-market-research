@@ -151,6 +151,26 @@ async def filings(
         return _err(exc)
 
 
+@mcp.tool()
+async def extract(url: str) -> dict:
+    """Fetch a web page and return its main content as clean, token-efficient markdown.
+
+    A research aid: YOU pick the URL (e.g. a source found while researching), this strips the
+    nav/ads/boilerplate and returns just the article/body so you read more signal per token. It
+    does not summarize or judge — that's your job. On a paywall or anti-bot block it honestly
+    returns `fetched_ok=false` with a note (it can't bypass those). Good for primary sources
+    (press releases, IR pages, news) the agent wants to read in full.
+    """
+    svc = services()
+    if svc.extractor is None:
+        return _err(ValueError("Extractor is not configured."))
+    try:
+        page = await svc.extractor.extract(url)
+        return _ok(page.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
 def main() -> None:
     mcp.run()
 
