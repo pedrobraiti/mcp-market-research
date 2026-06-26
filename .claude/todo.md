@@ -3,7 +3,7 @@
 Plano vivo do projeto. Tarefas e subtarefas, marcadas conforme concluídas.
 
 ## Em progresso
-- [ ] **Benchmark de pesquisa (decisão por evidência):** lado Claude Code já gerado (`benchmark/claude-code/`); aguardando o usuário rodar os 3 prompts no claude.ai web (`benchmark/PROMPTS-FOR-CLAUDE-WEB.md`) e salvar em `benchmark/claude-web/`. Depois eu comparo.
+- [ ] Decidir com o usuário a próxima prioridade de código (ver opções nas Próximas): SEC fase 2 (XBRL cross-check), `extract` (sentido de pesquisa), `price_history`/`technicals`, ou FRED.
 
 ## Próximas
 - [ ] Endurecer mais o yfinance: **cache leve com TTL** (dedupe + alívio de rate-limit) e **proveniência por campo** (de onde veio cada número) — o retry/backoff já está feito
@@ -11,6 +11,7 @@ Plano vivo do projeto. Tarefas e subtarefas, marcadas conforme concluídas.
 - [ ] Próximas tools de aprofundamento por símbolo (v1/v2): `valuation_history`, `quality_metrics`, `technicals`, `price_history`
 - [ ] **SEC EDGAR — fase 2: cross-check de fundamentos via XBRL** (`companyfacts`/`companyconcept`) pra confrontar receita/lucro/etc. com o yfinance (a fonte autoritativa que ataca a fragilidade do yfinance)
 - [ ] Adapter FRED (`macro_context`)
+- [ ] **`extract(url)/fetch_clean(urls[])`** — sentido de captura: URL→markdown limpo, token-efficient (decisão do benchmark; fecha o gap de sourcing primário sem cruzar a fronteira sentido/cérebro)
 - [ ] Tools de descoberta v1: `screen` (com critérios técnicos), `peers`, `compare`
 - [ ] Tools de lote v1 (stateless): `watch_signals`, `news_digest`, `calendar`
 - [ ] (Workstream da skill, NÃO do Scout) Skill de estratégia `/analyze` e `/invest` com os 2 modos + **camada de memória de tese** (escreve a tese; passa pro Scout verificar stateless)
@@ -26,3 +27,4 @@ Plano vivo do projeto. Tarefas e subtarefas, marcadas conforme concluídas.
 - [x] `company_dossier(symbol, depth, as_of)` — meta-tool com `asyncio.gather`, tolerante a falha parcial (`notes`), pacote `research/`; testes + live-validado (MSFT)
 - [x] Endurecer yfinance — retry/backoff contra rate-limit; falha transitória deixa de se disfarçar de "símbolo inexistente" (testado)
 - [x] Adapter SEC EDGAR + tool `filings` (resolução de CIK, API oficial, `fetch_json` injetável); testes offline + live-validado (10-Ks reais da AAPL)
+- [x] Benchmark Claude Code × claude.ai web concluído (3 juízes cegos) → `benchmark/RESULTS.md` + ADR; decisão: research no cérebro, Scout ganha só o sentido `extract`

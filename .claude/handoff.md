@@ -4,12 +4,14 @@
 > de forma relativamente detalhada. É o PRIMEIRO arquivo que a próxima sessão lê.
 > Mantenha-o vivo e específico — detalhado o bastante para retomar sem reconstruir o raciocínio.
 
-**Última atualização:** 2026-06-25 — adapter SEC EDGAR + tool filings (5 tools no total)
+**Última atualização:** 2026-06-25 — benchmark de pesquisa concluído + decisão da camada de research
 
 ## Onde parei
 O projeto **Scout** (`mcp-market-research`, público em `pedrobraiti/mcp-market-research`) tem **código rodando**: scaffold espelhando o `mcp-ibkr-agent` (Valet) + **5 tools**, com **33 testes offline** passando, ruff limpo e **validado ao vivo** (yfinance: AAPL/MSFT; SEC EDGAR: 10-Ks reais da AAPL). Rodei o **lado Claude Code do benchmark** (3 relatórios em `benchmark/claude-code/`).
 
-**Aguardando o usuário** rodar os 3 prompts do `benchmark/PROMPTS-FOR-CLAUDE-WEB.md` no claude.ai web e salvar em `benchmark/claude-web/` — o deep research dele ainda está rodando; ele avisa quando terminar e jogar os markdowns na pasta. Aí eu comparo os dois lados e decidimos a camada narrativa.
+**Benchmark concluído.** Usuário trouxe os 3 relatórios da claude.ai web; 3 juízes cegos compararam. Resultado em `benchmark/RESULTS.md`: claude web venceu os 3 mas por margem modesta (84% vs 96%) e o Claude Code **convergiu em todos os fatos centrais** (eventos reais, não alucinação). **Decisão registrada (ADR 2026-06-25):** a pesquisa narrativa mora no **cérebro** (skill/subagentes do Claude Code, que já está no mesmo nível); o Scout NÃO terá tool de deep-research que conclui — ganhará só o **sentido `extract(url)`** (URL→markdown limpo) pra fechar o gap de sourcing primário (a web venceu em parte porque buscou 8-Ks da SEC que nossos agentes levaram 403). Copiar/colar pra claude web = escape hatch opcional.
+
+**Aguardando o usuário** escolher a próxima prioridade de código (ele perguntou sobre a fronteira research=tool vs cérebro — já respondida com o benchmark). Opções no `todo.md`: SEC fase 2 (XBRL cross-check), `extract` (sentido de pesquisa), `price_history`/`technicals`, FRED.
 
 ## O que já está implementado (não refazer)
 - `src/scout/` layout hexagonal: `config.py` (pydantic-settings, prefixo `SCOUT_`), `domain/models.py` (CompanySnapshot, Fundamentals, DividendHistory, CompanyDossier, Filing/FilingsList — Decimal, com `as_of`), `domain/ports.py` (`MarketDataSource` e `FilingsSource`, com `as_of`), `adapters/yfinance/market_data.py` (parsing defensivo, `asyncio.to_thread`, import lazy, factory injetável, **retry/backoff**), `adapters/sec/edgar.py` (resolução de CIK via `company_tickers.json` cacheada, submissions API, `fetch_json` injetável, UA da SEC), `research/dossier.py` (`build_dossier`, `asyncio.gather`, tolerante a falha → `notes`), `server/services.py` (compõe yfinance + SEC) e `server/app.py` (FastMCP, envelope `{ok,data}`, **5 tools**). `healthcheck.py`.
