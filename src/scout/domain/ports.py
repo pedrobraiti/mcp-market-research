@@ -28,6 +28,7 @@ from .models import (
     Period,
     PriceHistory,
     QualityMetrics,
+    RetailBuzz,
     SecFinancials,
     SymbolSearch,
     WebNewsSearch,
@@ -137,6 +138,15 @@ class MacroSource(Protocol):
 
     async def get_macro_context(self, as_of: date | None = None) -> MacroSnapshot:
         """Latest value of each key macro series, at or before ``as_of``."""
+        ...
+
+
+@runtime_checkable
+class RetailBuzzSource(Protocol):
+    """Reddit mention buzz (ApeWisdom today)."""
+
+    async def get_buzz(self, symbol: str | None = None, limit: int = 20) -> RetailBuzz:
+        """Trending tickers by Reddit mentions, or one symbol's buzz if given."""
         ...
 
 

@@ -400,6 +400,24 @@ async def earnings(symbol: str, as_of: str | None = None) -> dict:
 
 
 @mcp.tool()
+async def retail_buzz(symbol: str | None = None, limit: int = 20) -> dict:
+    """Reddit (WSB/stocks) mention buzz — a retail-attention signal.
+
+    Without `symbol`, returns the top trending tickers by Reddit mentions (rank, mentions, and the
+    change vs 24h ago). With `symbol`, returns that name's buzz (or a note if it isn't trending).
+    This is **attention/buzz, not sentiment** and skews toward meme names — raw counts to interpret.
+    """
+    svc = services()
+    if svc.retail_buzz is None:
+        return _err(ValueError("Retail buzz is not configured."))
+    try:
+        result = await svc.retail_buzz.get_buzz(symbol, int(limit))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def ownership(symbol: str) -> dict:
     """Who owns the stock: insider & institution %, top institutions, recent insider trades.
 

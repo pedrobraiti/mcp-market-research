@@ -47,6 +47,7 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `options_volatility(symbol, expiry?)` — ATM implied vol + options-implied expected move to expiry.
 - `analyst_view(symbol)` — sell-side consensus & price targets (third-party opinion, as data).
 - `ownership(symbol)` — insider & institution %, top institutions, recent insider trades (13F/Form 4).
+- `retail_buzz(symbol?, limit?)` — Reddit (WSB/stocks) mention buzz (**ApeWisdom**, keyless) — retail attention.
 - `price_history(symbol, period?, interval?, as_of?)` — OHLCV bars.
 - `technicals(symbol, as_of?)` — SMA(50/200), EMA(20), RSI(14), MACD, ATR(14), 52-week high/low (raw numbers, no trend verdict).
 - `sector_performance(period?, as_of?)` — total return of each US sector (via SPDR ETFs) — rotation.

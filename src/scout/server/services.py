@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..adapters.apewisdom import ApeWisdomBuzz
 from ..adapters.fred import FredMacro
 from ..adapters.gdelt import GdeltNewsSearch
 from ..adapters.price_fallback import PriceFallbackMarketData
@@ -23,6 +24,7 @@ from ..domain.ports import (
     MacroSource,
     MarketDataSource,
     NewsSearchSource,
+    RetailBuzzSource,
 )
 
 
@@ -35,6 +37,7 @@ class Services:
     extractor: ContentExtractor | None = None
     macro: MacroSource | None = None
     news_search: NewsSearchSource | None = None
+    retail_buzz: RetailBuzzSource | None = None
 
 
 def build_services(settings: Settings | None = None) -> Services:
@@ -50,4 +53,5 @@ def build_services(settings: Settings | None = None) -> Services:
         extractor=WebExtractor(settings.web_user_agent, timeout=timeout),
         macro=FredMacro(timeout=timeout),
         news_search=GdeltNewsSearch(timeout=timeout),
+        retail_buzz=ApeWisdomBuzz(timeout=timeout),
     )

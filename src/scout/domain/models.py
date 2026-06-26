@@ -481,6 +481,24 @@ class OptionsVolatility(BaseModel):
     note: str | None = None
 
 
+class RetailBuzzItem(BaseModel):
+    symbol: str
+    name: str | None = None
+    rank: int | None = None
+    rank_24h_ago: int | None = None
+    mentions: int | None = None
+    mentions_24h_ago: int | None = None
+    upvotes: int | None = None
+
+
+class RetailBuzz(BaseModel):
+    """Reddit (WSB/stocks) mention buzz — a retail-attention signal, not a sentiment score."""
+
+    symbol: str | None = None
+    items: list[RetailBuzzItem] = []
+    note: str | None = None
+
+
 class WebNewsItem(BaseModel):
     title: str | None = None
     domain: str | None = None
