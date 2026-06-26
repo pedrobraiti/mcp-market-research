@@ -30,6 +30,8 @@ from ...domain.models import (
     Fundamentals,
     InsiderTransaction,
     InstitutionalHolder,
+    MoverRow,
+    MoversList,
     NewsItem,
     NewsList,
     Ownership,
@@ -70,6 +72,20 @@ def _default_search(query: str) -> list:
     import yfinance
 
     return yfinance.Search(query).quotes
+
+
+def _default_screen(predefined_key: str) -> dict:
+    import yfinance
+
+    return yfinance.screen(predefined_key)
+
+
+# Friendly category → yfinance predefined screen id.
+_MOVER_CATEGORIES = {
+    "gainers": "day_gainers",
+    "losers": "day_losers",
+    "most_active": "most_actives",
+}
 
 
 def _dec(value: Any) -> Decimal | None:
@@ -124,11 +140,13 @@ class YFinanceMarketData:
         retry_attempts: int = 3,
         retry_base_delay: float = 0.5,
         search_fn: Callable[[str], list] | None = None,
+        screen_fn: Callable[[str], dict] | None = None,
     ) -> None:
         self._ticker_factory = ticker_factory or _default_ticker_factory
         self._retry_attempts = max(1, retry_attempts)
         self._retry_base_delay = retry_base_delay
         self._search_fn = search_fn or _default_search
+        self._screen_fn = screen_fn or _default_screen
 
     # ---- public async API (the port) -------------------------------------------------
 
@@ -180,6 +198,11 @@ class YFinanceMarketData:
     async def search_symbols(self, query: str, limit: int = 10) -> SymbolSearch:
         return await asyncio.to_thread(
             self._retrying, self._search_sync, query.strip(), max(1, min(limit, 25))
+        )
+
+    async def get_movers(self, category: str = "gainers", limit: int = 20) -> MoversList:
+        return await asyncio.to_thread(
+            self._retrying, self._movers_sync, category.strip().lower(), max(1, min(limit, 50))
         )
 
     async def get_quality_metrics(
@@ -423,6 +446,27 @@ class YFinanceMarketData:
                     next_date = event_date
         events.sort(key=lambda e: e.event_date or date.min)
         return EarningsInfo(symbol=symbol, next_earnings_date=next_date, events=events)
+
+    def _movers_sync(self, category: str, limit: int) -> MoversList:
+        predefined = _MOVER_CATEGORIES.get(category)
+        if predefined is None:
+            raise ValueError(f"category must be one of {sorted(_MOVER_CATEGORIES)}.")
+        result = self._screen_fn(predefined)
+        quotes = (result or {}).get("quotes") or [] if isinstance(result, dict) else []
+        movers: list[MoverRow] = []
+        for quote in quotes[:limit]:
+            if not isinstance(quote, dict) or not quote.get("symbol"):
+                continue
+            movers.append(
+                MoverRow(
+                    symbol=quote["symbol"],
+                    name=quote.get("shortName") or quote.get("longName"),
+                    price=_dec(quote.get("regularMarketPrice")),
+                    change_percent=_quantize(_dec(quote.get("regularMarketChangePercent")), 4),
+                    volume=_volume(quote.get("regularMarketVolume")),
+                )
+            )
+        return MoversList(category=category, movers=movers)
 
     def _search_sync(self, query: str, limit: int) -> SymbolSearch:
         quotes = self._search_fn(query) or []

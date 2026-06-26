@@ -350,6 +350,31 @@ async def test_quality_metrics_ratios_and_cagr():
     assert Decimal("0.01") < metrics.revenue_cagr < Decimal("0.03")
 
 
+async def test_market_movers_parses_screen():
+    screen_result = {
+        "quotes": [
+            {
+                "symbol": "ABCD",
+                "shortName": "Abcd Inc",
+                "regularMarketPrice": 12.5,
+                "regularMarketChangePercent": 18.4,
+                "regularMarketVolume": 5_000_000,
+            },
+            {"no_symbol": True},
+        ]
+    }
+    source = YFinanceMarketData(screen_fn=lambda key: screen_result)
+    result = await source.get_movers("gainers", 10)
+    assert result.category == "gainers"
+    assert len(result.movers) == 1
+    assert result.movers[0].symbol == "ABCD"
+    assert result.movers[0].change_percent == Decimal("18.4")
+    assert result.movers[0].volume == 5_000_000
+
+    with pytest.raises(ValueError):
+        await source.get_movers("nonsense")
+
+
 async def test_search_symbols_parses_quotes():
     quotes = [
         {"symbol": "AAPL", "shortname": "Apple Inc.", "exchange": "NMS", "quoteType": "EQUITY"},

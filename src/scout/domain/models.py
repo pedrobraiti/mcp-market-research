@@ -21,6 +21,21 @@ class Period(StrEnum):
     QUARTERLY = "quarterly"
 
 
+class MoverRow(BaseModel):
+    symbol: str
+    name: str | None = None
+    price: Decimal | None = None
+    change_percent: Decimal | None = None
+    volume: int | None = None
+
+
+class MoversList(BaseModel):
+    """Market-wide top gainers / losers / most-active — discovery without a symbol in hand."""
+
+    category: str
+    movers: list[MoverRow] = []
+
+
 class SymbolMatch(BaseModel):
     symbol: str
     name: str | None = None

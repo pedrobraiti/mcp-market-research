@@ -21,6 +21,7 @@ from .models import (
     FilingsList,
     Fundamentals,
     MacroSnapshot,
+    MoversList,
     NewsList,
     Ownership,
     Period,
@@ -91,6 +92,10 @@ class MarketDataSource(Protocol):
 
     async def search_symbols(self, query: str, limit: int = 10) -> SymbolSearch:
         """Resolve a free-text query (company name / partial ticker) to matching symbols."""
+        ...
+
+    async def get_movers(self, category: str = "gainers", limit: int = 20) -> MoversList:
+        """Market-wide top gainers / losers / most-active (no symbol needed)."""
         ...
 
 

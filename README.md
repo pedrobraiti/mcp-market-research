@@ -30,6 +30,7 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 
 - `company_dossier(symbol, depth?, as_of?)` — flagship: snapshot + fundamentals + dividends + technicals + earnings + analyst view + news gathered **in parallel**, degrades gracefully if one source is down.
 - `search_symbols(query, limit?)` — resolve a company name / partial ticker to symbols (the entry point).
+- `market_movers(category?, limit?)` — market-wide top gainers / losers / most-active (discovery without a symbol).
 - `compare(symbols[], as_of?)` — several names side by side (price, multiples, margins, sector).
 - `correlation_matrix(symbols[], period?, as_of?)` — pairwise return correlation (real diversification).
 - `classify(symbols[], as_of?)` — sector/industry/market-cap per symbol (to aggregate exposure).

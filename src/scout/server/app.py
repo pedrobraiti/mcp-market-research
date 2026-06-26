@@ -94,6 +94,24 @@ async def search_symbols(query: str, limit: int = 10) -> dict:
 
 
 @mcp.tool()
+async def market_movers(category: str = "gainers", limit: int = 20) -> dict:
+    """Market-wide top movers today — discovery WITHOUT a symbol in hand.
+
+    `category` is "gainers", "losers" or "most_active". Returns the names moving most today
+    (symbol, name, price, % change, volume) so you can ask "what's moving right now?" before you
+    have a ticker. Raw market data, not a pick.
+    """
+    svc = services()
+    try:
+        result = await svc.market_data.get_movers(category, int(limit))
+        return _ok(result.model_dump(mode="json"))
+    except ValueError as exc:
+        return _err(exc)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def compare(symbols: list[str], as_of: str | None = None) -> dict:
     """Compare several US stocks/ETFs side by side in one call.
 
