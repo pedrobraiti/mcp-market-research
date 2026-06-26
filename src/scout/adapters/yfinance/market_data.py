@@ -28,8 +28,11 @@ from ...domain.models import (
     EtfHolding,
     EtfHoldings,
     Fundamentals,
+    InsiderTransaction,
+    InstitutionalHolder,
     NewsItem,
     NewsList,
+    Ownership,
     Period,
     PriceBar,
     PriceHistory,
@@ -189,6 +192,11 @@ class YFinanceMarketData:
     async def get_etf_holdings(self, symbol: str) -> EtfHoldings | None:
         return await asyncio.to_thread(
             self._retrying, self._etf_holdings_sync, symbol.strip().upper()
+        )
+
+    async def get_ownership(self, symbol: str) -> Ownership | None:
+        return await asyncio.to_thread(
+            self._retrying, self._ownership_sync, symbol.strip().upper()
         )
 
     def _retrying(self, func: Callable[..., Any], *args: Any) -> Any:
@@ -435,6 +443,48 @@ class YFinanceMarketData:
             )
         return SymbolSearch(query=query, matches=matches)
 
+    def _ownership_sync(self, symbol: str) -> Ownership | None:
+        ticker = self._ticker_factory(symbol)
+        insider_pct, institution_pct = _major_holder_pcts(getattr(ticker, "major_holders", None))
+
+        institutions: list[InstitutionalHolder] = []
+        inst_frame = getattr(ticker, "institutional_holders", None)
+        if inst_frame is not None and not getattr(inst_frame, "empty", True):
+            for _, row in list(inst_frame.iterrows())[:10]:
+                institutions.append(
+                    InstitutionalHolder(
+                        holder=row.get("Holder"),
+                        shares=_dec(row.get("Shares")),
+                        pct_out=_dec(row.get("pctHeld") or row.get("% Out")),
+                        value=_dec(row.get("Value")),
+                    )
+                )
+
+        insiders: list[InsiderTransaction] = []
+        insider_frame = getattr(ticker, "insider_transactions", None)
+        if insider_frame is not None and not getattr(insider_frame, "empty", True):
+            for _, row in list(insider_frame.iterrows())[:15]:
+                insiders.append(
+                    InsiderTransaction(
+                        transaction_date=_to_date(row.get("Start Date") or row.get("Date")),
+                        insider=row.get("Insider"),
+                        position=row.get("Position"),
+                        transaction=row.get("Transaction") or row.get("Text"),
+                        shares=_dec(row.get("Shares")),
+                        value=_dec(row.get("Value")),
+                    )
+                )
+
+        if insider_pct is None and institution_pct is None and not institutions and not insiders:
+            return None
+        return Ownership(
+            symbol=symbol,
+            insider_percent=insider_pct,
+            institution_percent=institution_pct,
+            institutional_holders=institutions,
+            insider_transactions=insiders,
+        )
+
     def _etf_holdings_sync(self, symbol: str) -> EtfHoldings | None:
         try:
             funds = getattr(self._ticker_factory(symbol), "funds_data", None)
@@ -542,6 +592,25 @@ def _volume(value: Any) -> int | None:
 def _int(value: Any) -> int | None:
     decimal_value = _dec(value)
     return int(decimal_value) if decimal_value is not None else None
+
+
+def _major_holder_pcts(frame: Any) -> tuple[Decimal | None, Decimal | None]:
+    """Parse insider/institution percentages from yfinance's ``major_holders`` (modern format)."""
+    if frame is None or getattr(frame, "empty", True):
+        return None, None
+    index = list(getattr(frame, "index", []))
+    columns = list(getattr(frame, "columns", []))
+    has_pct = "insidersPercentHeld" in index or "institutionsPercentHeld" in index
+    if not columns or not has_pct:
+        return None, None
+    column = columns[0]
+    insider = None
+    if "insidersPercentHeld" in index:
+        insider = _dec(frame.at["insidersPercentHeld", column])
+    institution = None
+    if "institutionsPercentHeld" in index:
+        institution = _dec(frame.at["institutionsPercentHeld", column])
+    return insider, institution
 
 
 def _nested(data: dict, *keys: str) -> Any:

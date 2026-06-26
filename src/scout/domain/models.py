@@ -416,6 +416,36 @@ class EtfHoldings(BaseModel):
     note: str | None = None
 
 
+class InsiderTransaction(BaseModel):
+    transaction_date: date | None = None
+    insider: str | None = None
+    position: str | None = None
+    transaction: str | None = None
+    shares: Decimal | None = None
+    value: Decimal | None = None
+
+
+class InstitutionalHolder(BaseModel):
+    holder: str | None = None
+    shares: Decimal | None = None
+    pct_out: Decimal | None = None
+    value: Decimal | None = None
+
+
+class Ownership(BaseModel):
+    """Who owns the stock: insider/institution percentages, top institutions, insider trades.
+
+    Public-record data (13F / Form 4), reported as facts — a skin-in-the-game signal the agent
+    interprets. No verdict.
+    """
+
+    symbol: str
+    insider_percent: Decimal | None = None
+    institution_percent: Decimal | None = None
+    institutional_holders: list[InstitutionalHolder] = []
+    insider_transactions: list[InsiderTransaction] = []
+
+
 class ExtractedPage(BaseModel):
     """A web page fetched and reduced to clean, token-efficient markdown.
 

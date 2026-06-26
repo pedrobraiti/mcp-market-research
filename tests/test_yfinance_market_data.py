@@ -258,6 +258,47 @@ async def test_analyst_view_reports_consensus():
     assert view.target_high == Decimal("340.0")
 
 
+async def test_ownership_parses_holders_and_insiders():
+    class OwnershipTicker:
+        def __init__(self, symbol):
+            self.major_holders = pd.DataFrame(
+                {"Value": [0.0007, 0.62]},
+                index=["insidersPercentHeld", "institutionsPercentHeld"],
+            )
+            self.institutional_holders = pd.DataFrame(
+                {
+                    "Holder": ["Vanguard", "BlackRock"],
+                    "Shares": [1_000_000_000, 900_000_000],
+                    "Value": [3.0e11, 2.7e11],
+                    "pctHeld": [0.08, 0.07],
+                }
+            )
+            self.insider_transactions = pd.DataFrame(
+                {
+                    "Insider": ["Tim Cook"],
+                    "Position": ["CEO"],
+                    "Transaction": ["Sale"],
+                    "Shares": [50_000],
+                    "Value": [1.2e7],
+                    "Start Date": [pd.Timestamp("2026-05-10")],
+                }
+            )
+
+    source = YFinanceMarketData(ticker_factory=OwnershipTicker)
+    owner = await source.get_ownership("AAPL")
+    assert owner is not None
+    assert owner.insider_percent == Decimal("0.0007")
+    assert owner.institution_percent == Decimal("0.62")
+    assert owner.institutional_holders[0].holder == "Vanguard"
+    assert owner.institutional_holders[0].pct_out == Decimal("0.08")
+    assert owner.insider_transactions[0].insider == "Tim Cook"
+    assert owner.insider_transactions[0].transaction_date == date(2026, 5, 10)
+
+
+async def test_ownership_none_when_unavailable():
+    assert await YFinanceMarketData(ticker_factory=FakeTicker).get_ownership("AAPL") is None
+
+
 async def test_etf_holdings_parses_funds_data():
     class _FundsData:
         top_holdings = pd.DataFrame(

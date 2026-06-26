@@ -22,6 +22,7 @@ from .models import (
     Fundamentals,
     MacroSnapshot,
     NewsList,
+    Ownership,
     Period,
     PriceHistory,
     QualityMetrics,
@@ -82,6 +83,10 @@ class MarketDataSource(Protocol):
 
     async def get_etf_holdings(self, symbol: str) -> EtfHoldings | None:
         """An ETF's declared top holdings and sector weights; ``None`` if not a fund."""
+        ...
+
+    async def get_ownership(self, symbol: str) -> Ownership | None:
+        """Insider/institution ownership percentages, top institutions and recent insider trades."""
         ...
 
     async def search_symbols(self, query: str, limit: int = 10) -> SymbolSearch:

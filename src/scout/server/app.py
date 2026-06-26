@@ -365,6 +365,22 @@ async def earnings(symbol: str, as_of: str | None = None) -> dict:
 
 
 @mcp.tool()
+async def ownership(symbol: str) -> dict:
+    """Who owns the stock: insider & institution %, top institutions, recent insider trades.
+
+    Public-record data (13F / Form 4): insider-held and institution-held %, the largest
+    institutional holders, and recent insider buy/sell transactions. A skin-in-the-game signal —
+    raw facts, not a verdict; you interpret what insider buying/selling implies.
+    """
+    svc = services()
+    try:
+        result = await svc.market_data.get_ownership(symbol)
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def analyst_view(symbol: str) -> dict:
     """Sell-side analyst consensus and price targets for a US stock.
 
