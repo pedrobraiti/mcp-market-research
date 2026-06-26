@@ -5,16 +5,21 @@ import pytest
 
 from scout.config import Settings, get_settings
 from scout.domain.models import (
+    AnalystView,
     CompanySnapshot,
     DividendHistory,
+    EarningsInfo,
     Filing,
     FilingsList,
     Fundamentals,
+    NewsList,
     Period,
     PriceBar,
     PriceHistory,
     SecFinancialLine,
     SecFinancials,
+    SymbolMatch,
+    SymbolSearch,
 )
 from scout.server import app as app_module
 from scout.server.services import Services
@@ -41,6 +46,18 @@ class FakeSource:
 
         bars = [bar(1, "100", "101", "99"), bar(2, "102", "103", "101")]
         return PriceHistory(symbol=symbol.upper(), interval=interval, bars=bars, as_of=as_of)
+
+    async def get_news(self, symbol, limit=10):
+        return NewsList(symbol=symbol.upper())
+
+    async def get_earnings(self, symbol, as_of=None):
+        return EarningsInfo(symbol=symbol.upper())
+
+    async def get_analyst_view(self, symbol):
+        return AnalystView(symbol=symbol.upper(), recommendation_key="hold")
+
+    async def search_symbols(self, query, limit=10):
+        return SymbolSearch(query=query, matches=[SymbolMatch(symbol="AAPL", name="Apple Inc.")])
 
 
 class BrokenSource(FakeSource):
@@ -137,6 +154,13 @@ async def test_tool_surfaces_error_as_envelope(use_source):
     result = await app_module.company_snapshot("aapl")
     assert result["ok"] is False
     assert "data source down" in result["error"]
+
+
+async def test_search_symbols_tool(use_source):
+    use_source(FakeSource())
+    result = await app_module.search_symbols("apple")
+    assert result["ok"] is True
+    assert result["data"]["matches"][0]["symbol"] == "AAPL"
 
 
 async def test_price_history_tool(use_source):

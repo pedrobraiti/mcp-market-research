@@ -24,6 +24,7 @@ from .models import (
     Period,
     PriceHistory,
     SecFinancials,
+    SymbolSearch,
 )
 
 
@@ -69,6 +70,10 @@ class MarketDataSource(Protocol):
 
     async def get_analyst_view(self, symbol: str) -> AnalystView | None:
         """Sell-side consensus rating and price targets (third-party opinion, as data)."""
+        ...
+
+    async def search_symbols(self, query: str, limit: int = 10) -> SymbolSearch:
+        """Resolve a free-text query (company name / partial ticker) to matching symbols."""
         ...
 
 

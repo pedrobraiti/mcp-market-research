@@ -258,6 +258,21 @@ async def test_analyst_view_reports_consensus():
     assert view.target_high == Decimal("340.0")
 
 
+async def test_search_symbols_parses_quotes():
+    quotes = [
+        {"symbol": "AAPL", "shortname": "Apple Inc.", "exchange": "NMS", "quoteType": "EQUITY"},
+        {"symbol": "APLE", "longname": "Apple Hospitality REIT", "quoteType": "EQUITY"},
+        {"no_symbol": True},  # malformed entry should be skipped
+    ]
+    source = YFinanceMarketData(search_fn=lambda q: quotes)
+    result = await source.search_symbols("apple", limit=10)
+    assert result.query == "apple"
+    assert len(result.matches) == 2
+    assert result.matches[0].symbol == "AAPL"
+    assert result.matches[0].name == "Apple Inc."
+    assert result.matches[1].name == "Apple Hospitality REIT"
+
+
 async def test_retry_recovers_from_transient_failure():
     FlakyTicker.accesses["n"] = 0
     FlakyTicker.fail_times = 2

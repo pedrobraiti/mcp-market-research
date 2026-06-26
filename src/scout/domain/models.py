@@ -21,6 +21,20 @@ class Period(StrEnum):
     QUARTERLY = "quarterly"
 
 
+class SymbolMatch(BaseModel):
+    symbol: str
+    name: str | None = None
+    exchange: str | None = None
+    type: str | None = None
+
+
+class SymbolSearch(BaseModel):
+    """Tickers matching a free-text query (company name, partial ticker)."""
+
+    query: str
+    matches: list[SymbolMatch] = []
+
+
 class CompanySnapshot(BaseModel):
     """A light, single-call portrait: price, day move and the key multiples."""
 
@@ -91,22 +105,6 @@ class DividendHistory(BaseModel):
     )
     payments: list[DividendPayment] = []
     as_of: date | None = None
-
-
-class CompanyDossier(BaseModel):
-    """A consolidated, single-call portrait that fans several reads out in parallel.
-
-    The flagship "research many things about a company at once" tool: snapshot + fundamentals
-    + dividends gathered concurrently and returned together. ``notes`` carries any partial
-    failure (one source down) so the dossier degrades gracefully instead of failing whole.
-    """
-
-    symbol: str
-    as_of: date | None = None
-    snapshot: CompanySnapshot | None = None
-    fundamentals: Fundamentals | None = None
-    dividends: DividendHistory | None = None
-    notes: list[str] = []
 
 
 class ComparisonRow(BaseModel):
@@ -197,6 +195,26 @@ class Technicals(BaseModel):
     week52_high: Decimal | None = None
     week52_low: Decimal | None = None
     bars_used: int | None = None
+
+
+class CompanyDossier(BaseModel):
+    """A consolidated, single-call portrait that fans several reads out in parallel.
+
+    The flagship "research many things about a company at once" tool: snapshot, fundamentals,
+    dividends, technicals, earnings, analyst view and news gathered concurrently and returned
+    together. ``notes`` carries any partial failure so the dossier degrades gracefully.
+    """
+
+    symbol: str
+    as_of: date | None = None
+    snapshot: CompanySnapshot | None = None
+    fundamentals: Fundamentals | None = None
+    dividends: DividendHistory | None = None
+    technicals: Technicals | None = None
+    earnings: EarningsInfo | None = None
+    analyst: AnalystView | None = None
+    news: NewsList | None = None
+    notes: list[str] = []
 
 
 class MacroIndicator(BaseModel):

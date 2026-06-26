@@ -10,10 +10,18 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 
+from ..analytics import compute_technicals
 from ..domain.models import CompanyDossier, Period
 from ..domain.ports import MarketDataSource
 
 DEPTHS = ("summary", "full")
+
+
+async def _technicals(source: MarketDataSource, symbol: str, as_of: date | None):
+    history = await source.get_price_history(symbol, "2y", "1d", as_of)
+    if history is None or not history.bars:
+        return None
+    return compute_technicals(history)
 
 
 async def build_dossier(
@@ -23,7 +31,8 @@ async def build_dossier(
     as_of: date | None = None,
 ) -> CompanyDossier:
     """Build a consolidated dossier. ``depth='summary'`` is snapshot-only; ``'full'`` adds
-    fundamentals and dividends. Reads run concurrently; partial failures land in ``notes``."""
+    fundamentals, dividends, technicals, earnings, analyst view and news — all concurrently.
+    Partial failures land in ``notes`` instead of failing the whole call."""
     if depth not in DEPTHS:
         raise ValueError(f"depth must be one of {DEPTHS}.")
 
@@ -31,10 +40,14 @@ async def build_dossier(
     labels = ["snapshot"]
     coroutines = [source.get_snapshot(clean_symbol, as_of)]
     if depth == "full":
-        labels += ["fundamentals", "dividends"]
+        labels += ["fundamentals", "dividends", "technicals", "earnings", "analyst", "news"]
         coroutines += [
             source.get_fundamentals(clean_symbol, Period.ANNUAL, as_of),
             source.get_dividends(clean_symbol, as_of),
+            _technicals(source, clean_symbol, as_of),
+            source.get_earnings(clean_symbol, as_of),
+            source.get_analyst_view(clean_symbol),
+            source.get_news(clean_symbol, 8),
         ]
 
     results = await asyncio.gather(*coroutines, return_exceptions=True)
@@ -56,5 +69,9 @@ async def build_dossier(
         snapshot=resolved.get("snapshot"),
         fundamentals=resolved.get("fundamentals"),
         dividends=resolved.get("dividends"),
+        technicals=resolved.get("technicals"),
+        earnings=resolved.get("earnings"),
+        analyst=resolved.get("analyst"),
+        news=resolved.get("news"),
         notes=notes,
     )

@@ -69,6 +69,22 @@ async def company_dossier(symbol: str, depth: str = "full", as_of: str | None = 
 
 
 @mcp.tool()
+async def search_symbols(query: str, limit: int = 10) -> dict:
+    """Resolve a company name or partial ticker to matching symbols.
+
+    The starting point when you have a name but not the ticker (e.g. "nvidia", "coca cola").
+    Returns candidates with symbol, name, exchange and instrument type — pick the right ticker,
+    then feed it to the other tools.
+    """
+    svc = services()
+    try:
+        result = await svc.market_data.search_symbols(query, int(limit))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def compare(symbols: list[str], as_of: str | None = None) -> dict:
     """Compare several US stocks/ETFs side by side in one call.
 

@@ -31,6 +31,8 @@ from ...domain.models import (
     Period,
     PriceBar,
     PriceHistory,
+    SymbolMatch,
+    SymbolSearch,
 )
 
 # A revenue/gross-profit/etc. line item is looked up by trying several label spellings,
@@ -56,6 +58,12 @@ def _default_ticker_factory(symbol: str) -> Any:
     import yfinance  # imported lazily so tests never need the package or the network
 
     return yfinance.Ticker(symbol)
+
+
+def _default_search(query: str) -> list:
+    import yfinance
+
+    return yfinance.Search(query).quotes
 
 
 def _dec(value: Any) -> Decimal | None:
@@ -109,10 +117,12 @@ class YFinanceMarketData:
         ticker_factory: Callable[[str], Any] | None = None,
         retry_attempts: int = 3,
         retry_base_delay: float = 0.5,
+        search_fn: Callable[[str], list] | None = None,
     ) -> None:
         self._ticker_factory = ticker_factory or _default_ticker_factory
         self._retry_attempts = max(1, retry_attempts)
         self._retry_base_delay = retry_base_delay
+        self._search_fn = search_fn or _default_search
 
     # ---- public async API (the port) -------------------------------------------------
 
@@ -160,6 +170,11 @@ class YFinanceMarketData:
 
     async def get_analyst_view(self, symbol: str) -> AnalystView | None:
         return await asyncio.to_thread(self._retrying, self._analyst_sync, symbol.strip().upper())
+
+    async def search_symbols(self, query: str, limit: int = 10) -> SymbolSearch:
+        return await asyncio.to_thread(
+            self._retrying, self._search_sync, query.strip(), max(1, min(limit, 25))
+        )
 
     def _retrying(self, func: Callable[..., Any], *args: Any) -> Any:
         """Call a blocking fetch, retrying transient failures with exponential backoff.
@@ -383,6 +398,25 @@ class YFinanceMarketData:
                     next_date = event_date
         events.sort(key=lambda e: e.event_date or date.min)
         return EarningsInfo(symbol=symbol, next_earnings_date=next_date, events=events)
+
+    def _search_sync(self, query: str, limit: int) -> SymbolSearch:
+        quotes = self._search_fn(query) or []
+        matches: list[SymbolMatch] = []
+        for quote in quotes[:limit]:
+            if not isinstance(quote, dict):
+                continue
+            symbol = quote.get("symbol")
+            if not symbol:
+                continue
+            matches.append(
+                SymbolMatch(
+                    symbol=symbol,
+                    name=quote.get("shortname") or quote.get("longname"),
+                    exchange=quote.get("exchange") or quote.get("exchDisp"),
+                    type=quote.get("quoteType") or quote.get("typeDisp"),
+                )
+            )
+        return SymbolSearch(query=query, matches=matches)
 
     def _analyst_sync(self, symbol: str) -> AnalystView | None:
         info = _info(self._ticker_factory(symbol))
