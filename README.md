@@ -73,7 +73,7 @@ server/      MCP server (FastMCP) + dependency composition
 
 - **Python 3.12+**
 - **MCP server** (FastMCP)
-- Free data sources: **yfinance** (market/fundamentals/dividends/prices), **SEC EDGAR** (filings), **FRED** (macro, keyless) — all live. stooq and paid free-tiers (Finnhub/FMP/Alpha Vantage) are pluggable later.
+- Free, keyless data sources: **yfinance** (market/fundamentals/dividends/prices), **SEC EDGAR** (filings + XBRL), **FRED** (macro). **stooq** is wired as a transparent price-history fallback when yfinance fails. Paid free-tiers (Finnhub/FMP) are pluggable behind the same ports.
 
 ## Develop
 

@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..adapters.fred import FredMacro
+from ..adapters.price_fallback import PriceFallbackMarketData
 from ..adapters.sec import SecEdgar
+from ..adapters.stooq import StooqPrices
 from ..adapters.web import WebExtractor
 from ..adapters.yfinance import YFinanceMarketData
 from ..config import Settings, get_settings
@@ -36,9 +38,10 @@ def build_services(settings: Settings | None = None) -> Services:
     settings = settings or get_settings()
     timeout = settings.request_timeout_seconds
     sec = SecEdgar(settings.sec_user_agent, timeout=timeout)  # one instance: filings + financials
+    market_data = PriceFallbackMarketData(YFinanceMarketData(), StooqPrices(timeout=timeout))
     return Services(
         settings=settings,
-        market_data=YFinanceMarketData(),
+        market_data=market_data,
         filings=sec,
         financials=sec,
         extractor=WebExtractor(settings.web_user_agent, timeout=timeout),
