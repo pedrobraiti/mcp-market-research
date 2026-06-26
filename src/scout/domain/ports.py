@@ -23,6 +23,7 @@ from .models import (
     MacroSnapshot,
     MoversList,
     NewsList,
+    OptionsVolatility,
     Ownership,
     Period,
     PriceHistory,
@@ -88,6 +89,12 @@ class MarketDataSource(Protocol):
 
     async def get_ownership(self, symbol: str) -> Ownership | None:
         """Insider/institution ownership percentages, top institutions and recent insider trades."""
+        ...
+
+    async def get_options_volatility(
+        self, symbol: str, expiry: str | None = None
+    ) -> OptionsVolatility | None:
+        """ATM implied vol and the options-implied expected move to the (nearest) expiry."""
         ...
 
     async def search_symbols(self, query: str, limit: int = 10) -> SymbolSearch:

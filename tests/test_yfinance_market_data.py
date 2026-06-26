@@ -258,6 +258,39 @@ async def test_analyst_view_reports_consensus():
     assert view.target_high == Decimal("340.0")
 
 
+async def test_options_volatility_expected_move():
+    calls = pd.DataFrame({"strike": [240.0, 250.0, 260.0], "impliedVolatility": [0.40, 0.30, 0.42]})
+    puts = pd.DataFrame({"strike": [240.0, 250.0, 260.0], "impliedVolatility": [0.41, 0.32, 0.43]})
+
+    class _Chain:
+        def __init__(self):
+            self.calls = calls
+            self.puts = puts
+
+    class OptionsTicker:
+        def __init__(self, symbol):
+            self.info = {"currentPrice": 250.0}
+            self.options = ["2026-07-10", "2026-08-21"]
+
+        def option_chain(self, expiry):
+            return _Chain()
+
+    source = YFinanceMarketData(ticker_factory=OptionsTicker)
+    vol = await source.get_options_volatility("AAPL")
+    assert vol is not None
+    assert vol.expiry == date(2026, 7, 10)  # nearest expiry chosen
+    assert vol.atm_strike == Decimal("250.0")  # closest strike to 250 price
+    assert vol.atm_iv == Decimal("0.31")  # avg of ATM call 0.30 and put 0.32
+    assert vol.current_price == Decimal("250.0")
+    assert vol.expected_move_percent is not None and vol.expected_move_percent > Decimal("0")
+    assert vol.expected_move_low < Decimal("250") < vol.expected_move_high
+
+
+async def test_options_volatility_none_without_chain():
+    source = YFinanceMarketData(ticker_factory=FakeTicker)  # no options attribute
+    assert await source.get_options_volatility("AAPL") is None
+
+
 async def test_ownership_parses_holders_and_insiders():
     class OwnershipTicker:
         def __init__(self, symbol):

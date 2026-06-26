@@ -43,6 +43,7 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `dividends(symbol, as_of?)` — payment history, trailing yield, growth streak, cut flag.
 - `news(symbol, limit?)` — recent headlines (title, publisher, date, link) — pairs with `extract`.
 - `earnings(symbol, as_of?)` — next earnings date + history (estimate / actual / surprise).
+- `options_volatility(symbol, expiry?)` — ATM implied vol + options-implied expected move to expiry.
 - `analyst_view(symbol)` — sell-side consensus & price targets (third-party opinion, as data).
 - `ownership(symbol)` — insider & institution %, top institutions, recent insider trades (13F/Form 4).
 - `price_history(symbol, period?, interval?, as_of?)` — OHLCV bars.

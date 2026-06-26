@@ -367,6 +367,23 @@ async def news(symbol: str, limit: int = 10) -> dict:
 
 
 @mcp.tool()
+async def options_volatility(symbol: str, expiry: str | None = None) -> dict:
+    """Implied volatility and the options-implied expected move for a US stock/ETF.
+
+    Returns ATM implied vol and the 1-sigma expected move (% and $ range) to the chosen `expiry`
+    (YYYY-MM-DD; nearest by default) — i.e. how much the options market is pricing the stock to
+    swing (useful sizing a stop or gauging an earnings move). `data` is null if no options trade.
+    Raw numbers, not a trade call.
+    """
+    svc = services()
+    try:
+        result = await svc.market_data.get_options_volatility(symbol, expiry)
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def earnings(symbol: str, as_of: str | None = None) -> dict:
     """Earnings calendar and history for a US company.
 

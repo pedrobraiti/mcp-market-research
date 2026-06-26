@@ -34,6 +34,7 @@ from ...domain.models import (
     MoversList,
     NewsItem,
     NewsList,
+    OptionsVolatility,
     Ownership,
     Period,
     PriceBar,
@@ -220,6 +221,13 @@ class YFinanceMarketData:
     async def get_ownership(self, symbol: str) -> Ownership | None:
         return await asyncio.to_thread(
             self._retrying, self._ownership_sync, symbol.strip().upper()
+        )
+
+    async def get_options_volatility(
+        self, symbol: str, expiry: str | None = None
+    ) -> OptionsVolatility | None:
+        return await asyncio.to_thread(
+            self._retrying, self._options_sync, symbol.strip().upper(), expiry
         )
 
     def _retrying(self, func: Callable[..., Any], *args: Any) -> Any:
@@ -487,6 +495,40 @@ class YFinanceMarketData:
             )
         return SymbolSearch(query=query, matches=matches)
 
+    def _options_sync(self, symbol: str, expiry: str | None) -> OptionsVolatility | None:
+        ticker = self._ticker_factory(symbol)
+        expiries = list(getattr(ticker, "options", None) or [])
+        if not expiries:
+            return None
+        chosen = expiry if (expiry and expiry in expiries) else expiries[0]
+        chain = ticker.option_chain(chosen)
+        info = _info(ticker)
+        price = _dec(info.get("currentPrice") or info.get("regularMarketPrice")) if info else None
+        expiry_date = _to_date(chosen)
+        days = (expiry_date - date.today()).days if expiry_date else None
+        atm_strike, atm_iv = _atm_iv(
+            getattr(chain, "calls", None), getattr(chain, "puts", None), price
+        )
+        move_pct = move_amount = move_low = move_high = None
+        if atm_iv is not None and price is not None and days and days > 0:
+            move_pct = atm_iv * Decimal(str(math.sqrt(days / 365)))
+            move_amount = price * move_pct
+            move_low = price - move_amount
+            move_high = price + move_amount
+        return OptionsVolatility(
+            symbol=symbol,
+            expiry=expiry_date,
+            days_to_expiry=days,
+            current_price=price,
+            atm_strike=atm_strike,
+            atm_iv=_quantize(atm_iv, 4),
+            expected_move_percent=_quantize(move_pct, 4),
+            expected_move_amount=_quantize(move_amount, 2),
+            expected_move_low=_quantize(move_low, 2),
+            expected_move_high=_quantize(move_high, 2),
+            note=None if atm_iv is not None else "No implied vol available for this expiry.",
+        )
+
     def _ownership_sync(self, symbol: str) -> Ownership | None:
         ticker = self._ticker_factory(symbol)
         insider_pct, institution_pct = _major_holder_pcts(getattr(ticker, "major_holders", None))
@@ -636,6 +678,34 @@ def _volume(value: Any) -> int | None:
 def _int(value: Any) -> int | None:
     decimal_value = _dec(value)
     return int(decimal_value) if decimal_value is not None else None
+
+
+def _nearest_iv(frame: Any, price: Decimal | None) -> tuple[Decimal | None, Decimal | None]:
+    """Strike and implied vol of the option whose strike is closest to ``price``."""
+    if frame is None or getattr(frame, "empty", True) or price is None:
+        return None, None
+    target = float(price)
+    best_strike: Decimal | None = None
+    best_iv: Decimal | None = None
+    best_diff = float("inf")
+    for _, row in frame.iterrows():
+        strike = _dec(row.get("strike"))
+        if strike is None:
+            continue
+        diff = abs(float(strike) - target)
+        if diff < best_diff:
+            best_diff, best_strike, best_iv = diff, strike, _dec(row.get("impliedVolatility"))
+    return best_strike, best_iv
+
+
+def _atm_iv(
+    calls: Any, puts: Any, price: Decimal | None
+) -> tuple[Decimal | None, Decimal | None]:
+    call_strike, call_iv = _nearest_iv(calls, price)
+    _, put_iv = _nearest_iv(puts, price)
+    ivs = [iv for iv in (call_iv, put_iv) if iv is not None and iv > 0]
+    average_iv = sum(ivs) / len(ivs) if ivs else None
+    return call_strike, average_iv
 
 
 def _major_holder_pcts(frame: Any) -> tuple[Decimal | None, Decimal | None]:

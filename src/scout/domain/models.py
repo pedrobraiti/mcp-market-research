@@ -461,6 +461,26 @@ class Ownership(BaseModel):
     insider_transactions: list[InsiderTransaction] = []
 
 
+class OptionsVolatility(BaseModel):
+    """Implied volatility and the options-implied expected move to an expiry. Raw data."""
+
+    symbol: str
+    expiry: date | None = None
+    days_to_expiry: int | None = None
+    current_price: Decimal | None = None
+    atm_strike: Decimal | None = None
+    atm_iv: Decimal | None = Field(
+        default=None, description="ATM implied vol, annualized fraction."
+    )
+    expected_move_percent: Decimal | None = Field(
+        default=None, description="1-sigma move to expiry = IV * sqrt(days/365)."
+    )
+    expected_move_amount: Decimal | None = None
+    expected_move_low: Decimal | None = None
+    expected_move_high: Decimal | None = None
+    note: str | None = None
+
+
 class ExtractedPage(BaseModel):
     """A web page fetched and reduced to clean, token-efficient markdown.
 
