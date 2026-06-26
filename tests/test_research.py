@@ -19,6 +19,7 @@ from scout.research import (
     build_correlation,
     build_news_digest,
     build_relative_strength,
+    build_sector_performance,
 )
 
 
@@ -128,6 +129,16 @@ async def test_relative_strength_vs_benchmark_sorted():
     assert result.rows[0].return_percent == Decimal("20.00")
     assert result.rows[0].excess_vs_benchmark == Decimal("15.00")
     assert result.rows[1].excess_vs_benchmark == Decimal("-3.00")
+
+
+async def test_sector_performance_sorts_and_notes_missing():
+    source = FakeSource(closes={"XLK": [100, 110], "XLE": [100, 95]})
+    result = await build_sector_performance(source, period="3mo")
+    # Only XLK and XLE have data; the rest land in notes.
+    ranked = [(s.sector, s.return_percent) for s in result.sectors]
+    assert ranked[0] == ("Technology", Decimal("10.00"))
+    assert ("Energy", Decimal("-5.00")) in ranked
+    assert any("XLV" in n for n in result.notes)
 
 
 async def test_classification_in_batch():

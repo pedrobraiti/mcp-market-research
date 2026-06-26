@@ -23,6 +23,7 @@ from ..research import (
     build_dossier,
     build_news_digest,
     build_relative_strength,
+    build_sector_performance,
 )
 from .services import Services, build_services
 
@@ -374,6 +375,39 @@ async def analyst_view(symbol: str) -> dict:
     svc = services()
     try:
         result = await svc.market_data.get_analyst_view(symbol)
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def sector_performance(period: str = "3mo", as_of: str | None = None) -> dict:
+    """Total return of each US sector over `period`, via the 11 SPDR sector ETFs.
+
+    Shows where money has rotated (sectors sorted best to worst) — e.g. "what's leading the last
+    3 months?". Pass `as_of` (YYYY-MM-DD) for a past window. Raw returns, not a rotation call.
+    """
+    svc = services()
+    try:
+        result = await build_sector_performance(
+            svc.market_data, period.strip(), _parse_as_of(as_of)
+        )
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def etf_holdings(symbol: str) -> dict:
+    """An ETF's declared basket: top holdings (with weights) and sector weights.
+
+    The structured way to open a theme — e.g. the names inside a defense (ITA) or uranium (URA)
+    ETF — straight from the issuer's declared holdings, not opinion. `data` is null if the
+    symbol isn't a fund (or holdings aren't published).
+    """
+    svc = services()
+    try:
+        result = await svc.market_data.get_etf_holdings(symbol)
         return _ok(result.model_dump(mode="json") if result else None)
     except Exception as exc:  # noqa: BLE001
         return _err(exc)

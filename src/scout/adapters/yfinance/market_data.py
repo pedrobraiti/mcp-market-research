@@ -25,6 +25,8 @@ from ...domain.models import (
     DividendPayment,
     EarningsEvent,
     EarningsInfo,
+    EtfHolding,
+    EtfHoldings,
     Fundamentals,
     NewsItem,
     NewsList,
@@ -182,6 +184,11 @@ class YFinanceMarketData:
     ) -> QualityMetrics | None:
         return await asyncio.to_thread(
             self._retrying, self._quality_sync, symbol.strip().upper(), as_of
+        )
+
+    async def get_etf_holdings(self, symbol: str) -> EtfHoldings | None:
+        return await asyncio.to_thread(
+            self._retrying, self._etf_holdings_sync, symbol.strip().upper()
         )
 
     def _retrying(self, func: Callable[..., Any], *args: Any) -> Any:
@@ -427,6 +434,32 @@ class YFinanceMarketData:
                 )
             )
         return SymbolSearch(query=query, matches=matches)
+
+    def _etf_holdings_sync(self, symbol: str) -> EtfHoldings | None:
+        try:
+            funds = getattr(self._ticker_factory(symbol), "funds_data", None)
+        except Exception:  # noqa: BLE001 — yfinance raises for non-funds
+            return None
+        if funds is None:
+            return None
+        holdings: list[EtfHolding] = []
+        top = getattr(funds, "top_holdings", None)
+        if top is not None and not getattr(top, "empty", True):
+            for index_value, row in top.iterrows():
+                weight = _dec(row.get("Holding Percent"))
+                holdings.append(
+                    EtfHolding(symbol=str(index_value), name=row.get("Name"), weight=weight)
+                )
+        sector_weights: dict = {}
+        raw_sectors = getattr(funds, "sector_weightings", None)
+        if isinstance(raw_sectors, dict):
+            for sector, weight in raw_sectors.items():
+                value = _dec(weight)
+                if value is not None:
+                    sector_weights[str(sector)] = value
+        if not holdings and not sector_weights:
+            return None
+        return EtfHoldings(symbol=symbol, top_holdings=holdings, sector_weights=sector_weights)
 
     def _quality_sync(self, symbol: str, as_of: date | None) -> QualityMetrics | None:
         ticker = self._ticker_factory(symbol)

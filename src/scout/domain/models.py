@@ -387,6 +387,35 @@ class RelativeStrength(BaseModel):
     notes: list[str] = []
 
 
+class SectorReturn(BaseModel):
+    sector: str
+    etf: str
+    return_percent: Decimal | None = None
+
+
+class SectorPerformance(BaseModel):
+    """Total return of each US sector (via its SPDR ETF) over a period — rotation, as data."""
+
+    period: str
+    sectors: list[SectorReturn] = []
+    notes: list[str] = []
+
+
+class EtfHolding(BaseModel):
+    symbol: str
+    name: str | None = None
+    weight: Decimal | None = None
+
+
+class EtfHoldings(BaseModel):
+    """An ETF's declared basket — top holdings and sector weights, straight from the issuer."""
+
+    symbol: str
+    top_holdings: list[EtfHolding] = []
+    sector_weights: dict[str, Decimal] = {}
+    note: str | None = None
+
+
 class ExtractedPage(BaseModel):
     """A web page fetched and reduced to clean, token-efficient markdown.
 

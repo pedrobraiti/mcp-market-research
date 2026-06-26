@@ -9,6 +9,7 @@ from .comparison import build_comparison
 from .correlation import build_correlation
 from .dossier import build_dossier
 from .relative_strength import build_relative_strength
+from .sectors import build_sector_performance
 
 __all__ = [
     "build_calendar",
@@ -18,4 +19,5 @@ __all__ = [
     "build_dossier",
     "build_news_digest",
     "build_relative_strength",
+    "build_sector_performance",
 ]

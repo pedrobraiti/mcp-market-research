@@ -258,6 +258,31 @@ async def test_analyst_view_reports_consensus():
     assert view.target_high == Decimal("340.0")
 
 
+async def test_etf_holdings_parses_funds_data():
+    class _FundsData:
+        top_holdings = pd.DataFrame(
+            {"Name": ["Apple", "Microsoft"], "Holding Percent": [0.071, 0.063]},
+            index=["AAPL", "MSFT"],
+        )
+        sector_weightings = {"technology": 0.30, "financial_services": 0.13}
+
+    class EtfTicker:
+        def __init__(self, symbol):
+            self.funds_data = _FundsData()
+
+    source = YFinanceMarketData(ticker_factory=EtfTicker)
+    holdings = await source.get_etf_holdings("XLK")
+    assert holdings is not None
+    assert holdings.top_holdings[0].symbol == "AAPL"
+    assert holdings.top_holdings[0].weight == Decimal("0.071")
+    assert holdings.sector_weights["technology"] == Decimal("0.3")
+
+
+async def test_etf_holdings_none_for_non_fund():
+    source = YFinanceMarketData(ticker_factory=FakeTicker)  # no funds_data attribute
+    assert await source.get_etf_holdings("AAPL") is None
+
+
 async def test_quality_metrics_ratios_and_cagr():
     # _INFO lacks the ratio keys, so add them via a custom ticker.
     class QualityTicker(FakeTicker):

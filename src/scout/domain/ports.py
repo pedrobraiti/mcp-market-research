@@ -16,6 +16,7 @@ from .models import (
     CompanySnapshot,
     DividendHistory,
     EarningsInfo,
+    EtfHoldings,
     ExtractedPage,
     FilingsList,
     Fundamentals,
@@ -77,6 +78,10 @@ class MarketDataSource(Protocol):
         self, symbol: str, as_of: date | None = None
     ) -> QualityMetrics | None:
         """Derived ROE/ROA, margins and revenue/earnings growth & CAGR."""
+        ...
+
+    async def get_etf_holdings(self, symbol: str) -> EtfHoldings | None:
+        """An ETF's declared top holdings and sector weights; ``None`` if not a fund."""
         ...
 
     async def search_symbols(self, query: str, limit: int = 10) -> SymbolSearch:
