@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from scout.adapters.yfinance import YFinanceMarketData
+from scout.adapters.yfinance.market_data import _had_cut
 
 _INFO = {
     "longName": "Apple Inc.",
@@ -199,6 +200,31 @@ async def test_dividends_streak_and_no_cut():
     assert len(history.payments) == 4
     assert history.growth_streak_years == 3
     assert history.had_cut is False
+
+
+def test_had_cut_ignores_incomplete_current_year():
+    # Rising every complete year; the current (partial) year sums lower only because it has
+    # fewer ex-dates so far — must NOT be flagged as a cut. (The Micron mid-year false positive.)
+    annual = {
+        2021: Decimal("0.40"),
+        2022: Decimal("0.46"),
+        2023: Decimal("0.46"),
+        2024: Decimal("0.49"),
+        2025: Decimal("0.49"),
+        2026: Decimal("0.15"),  # partial year-to-date
+    }
+    assert _had_cut(annual, current_year=2026) is False
+
+
+def test_had_cut_detects_real_adjacent_cut_between_complete_years():
+    annual = {2022: Decimal("0.46"), 2023: Decimal("0.30"), 2024: Decimal("0.30")}
+    assert _had_cut(annual, current_year=2026) is True
+
+
+def test_had_cut_ignores_multi_year_gap():
+    # Paid in the 1990s, suspended, resumed decades later — a gap is not a cut.
+    annual = {1995: Decimal("0.20"), 2021: Decimal("0.10"), 2022: Decimal("0.12")}
+    assert _had_cut(annual, current_year=2026) is False
 
 
 async def test_dividends_as_of_filters_and_recomputes():

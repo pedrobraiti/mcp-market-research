@@ -217,6 +217,12 @@ async def quality_metrics(symbol: str, as_of: str | None = None) -> dict:
     Returns ROE, ROA, gross/operating/net margins, year-over-year revenue & earnings growth, and
     multi-year revenue & net-income CAGR (computed from the income statements). Raw numbers — it
     does not score "quality" or "moat"; you read ROE/margins/CAGR and judge.
+
+    NOTE on basis: ROE, ROA and the margins here are the provider's trailing-twelve-month (TTM)
+    figures — they will NOT reconcile with a single fiscal-year statement (e.g. ROE here ≠ that
+    year's net income / equity from `sec_financials`), since the numerator is TTM, not the
+    fiscal year. Only the CAGR fields are derived from the annual statements. Use `fundamentals`
+    / `sec_financials` for fiscal-year ratios.
     """
     svc = services()
     try:

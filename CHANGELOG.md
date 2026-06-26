@@ -27,6 +27,15 @@ dates anchor the entries.
   a yfinance failure doesn't lose data.
 - 96 offline tests; live-validated against every source.
 
+### Fixed
+- `dividends`: `had_cut` no longer flags a spurious cut from the **incomplete current calendar
+  year** (a partial year has fewer ex-dates, so its lower calendar-year total is a timing
+  artifact, not a real cut). Surfaced while validating a real MU equity-research report.
+
+### Changed
+- `quality_metrics`: docstring now states ROE/ROA/margins are the provider's **trailing-twelve-month**
+  figures and will not reconcile with a single fiscal-year statement (only CAGR is statement-derived).
+
 ### Notes
 - **Keyless by default.** No source requires a login or API key; SEC EDGAR only needs an
   identifiable `SCOUT_SEC_USER_AGENT` (its policy), not an account.

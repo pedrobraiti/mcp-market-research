@@ -363,7 +363,7 @@ class YFinanceMarketData:
             trailing_12m=trailing_12m,
             trailing_yield=_ratio(trailing_12m, price, 6),
             growth_streak_years=_growth_streak(annual, reference.year),
-            had_cut=_had_cut(annual),
+            had_cut=_had_cut(annual, reference.year),
             next_ex_dividend=next_ex.date() if next_ex else None,
             payments=payments,
             as_of=as_of,
@@ -836,18 +836,23 @@ def _annual_totals(payments: list[DividendPayment]) -> dict[int, Decimal]:
     return totals
 
 
-def _had_cut(annual: dict[int, Decimal]) -> bool | None:
-    """True if any ADJACENT calendar year cut the dividend.
+def _had_cut(annual: dict[int, Decimal], current_year: int) -> bool | None:
+    """True if any ADJACENT COMPLETE calendar year cut the dividend.
 
-    Only consecutive years are compared — a multi-year gap (e.g. a suspension with no data,
-    like Apple's 1996–2012) is not treated as a cut, because absent data and a true cut are
-    indistinguishable here. We report only what we can stand behind.
+    The incomplete current year is excluded: a year still in progress has fewer ex-dates than
+    a full year, so its lower calendar-year total is a payment-timing artifact, not a real cut
+    (this is what produced a spurious ``had_cut`` for names like Micron mid-year).
+
+    Only consecutive years are compared — a multi-year gap (a suspension with no data, or a
+    company that paid decades ago then resumed) is NOT treated as a cut, because absent data and
+    a true cut are indistinguishable here. We report only what we can stand behind.
     """
-    if len(annual) < 2:
+    complete = {y: total for y, total in annual.items() if y < current_year}
+    if len(complete) < 2:
         return None
-    years = sorted(annual)
+    years = sorted(complete)
     return any(
-        annual[y] < annual[prev]
+        complete[y] < complete[prev]
         for prev, y in zip(years, years[1:], strict=False)
         if y - prev == 1
     )
