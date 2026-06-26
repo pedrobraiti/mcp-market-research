@@ -130,6 +130,43 @@ class FilingsList(BaseModel):
     filings: list[Filing] = []
 
 
+class PriceBar(BaseModel):
+    date: date
+    open: Decimal | None = None
+    high: Decimal | None = None
+    low: Decimal | None = None
+    close: Decimal | None = None
+    volume: int | None = None
+
+
+class PriceHistory(BaseModel):
+    """OHLCV bars for a symbol over a range/interval."""
+
+    symbol: str
+    interval: str
+    bars: list[PriceBar] = []
+    as_of: date | None = None
+
+
+class Technicals(BaseModel):
+    """Computed technical indicators — raw numbers, no trend verdict (that's the agent's call)."""
+
+    symbol: str
+    as_of: date | None = None
+    last_price: Decimal | None = None
+    sma_50: Decimal | None = None
+    sma_200: Decimal | None = None
+    ema_20: Decimal | None = None
+    rsi_14: Decimal | None = None
+    macd: Decimal | None = None
+    macd_signal: Decimal | None = None
+    macd_histogram: Decimal | None = None
+    atr_14: Decimal | None = None
+    week52_high: Decimal | None = None
+    week52_low: Decimal | None = None
+    bars_used: int | None = None
+
+
 class ExtractedPage(BaseModel):
     """A web page fetched and reduced to clean, token-efficient markdown.
 

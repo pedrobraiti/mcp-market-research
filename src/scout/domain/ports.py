@@ -18,6 +18,7 @@ from .models import (
     FilingsList,
     Fundamentals,
     Period,
+    PriceHistory,
 )
 
 
@@ -41,6 +42,16 @@ class MarketDataSource(Protocol):
         self, symbol: str, as_of: date | None = None
     ) -> DividendHistory | None:
         """Dividend history, trailing yield, growth streak and cut flag up to ``as_of``."""
+        ...
+
+    async def get_price_history(
+        self,
+        symbol: str,
+        range: str = "6mo",
+        interval: str = "1d",
+        as_of: date | None = None,
+    ) -> PriceHistory | None:
+        """OHLCV bars over ``range`` at ``interval``, truncated at/before ``as_of``."""
         ...
 
 

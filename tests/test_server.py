@@ -11,6 +11,8 @@ from scout.domain.models import (
     FilingsList,
     Fundamentals,
     Period,
+    PriceBar,
+    PriceHistory,
 )
 from scout.server import app as app_module
 from scout.server.services import Services
@@ -25,6 +27,18 @@ class FakeSource:
 
     async def get_dividends(self, symbol, as_of=None):
         return DividendHistory(symbol=symbol.upper(), growth_streak_years=10)
+
+    async def get_price_history(self, symbol, range="6mo", interval="1d", as_of=None):
+        def bar(day, close, high, low):
+            return PriceBar(
+                date=date(2024, 1, day),
+                close=Decimal(close),
+                high=Decimal(high),
+                low=Decimal(low),
+            )
+
+        bars = [bar(1, "100", "101", "99"), bar(2, "102", "103", "101")]
+        return PriceHistory(symbol=symbol.upper(), interval=interval, bars=bars, as_of=as_of)
 
 
 class BrokenSource(FakeSource):
@@ -105,6 +119,23 @@ async def test_tool_surfaces_error_as_envelope(use_source):
     result = await app_module.company_snapshot("aapl")
     assert result["ok"] is False
     assert "data source down" in result["error"]
+
+
+async def test_price_history_tool(use_source):
+    use_source(FakeSource())
+    result = await app_module.price_history("aapl")
+    assert result["ok"] is True
+    assert len(result["data"]["bars"]) == 2
+    assert result["data"]["bars"][1]["close"] == "102"
+
+
+async def test_technicals_tool(use_source):
+    use_source(FakeSource())
+    result = await app_module.technicals("aapl")
+    assert result["ok"] is True
+    assert result["data"]["last_price"] == "102.0000"
+    assert result["data"]["bars_used"] == 2
+    assert result["data"]["sma_50"] is None  # only 2 bars
 
 
 async def test_filings_requires_user_agent(use_source):

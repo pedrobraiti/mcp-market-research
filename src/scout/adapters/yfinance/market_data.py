@@ -24,6 +24,8 @@ from ...domain.models import (
     DividendPayment,
     Fundamentals,
     Period,
+    PriceBar,
+    PriceHistory,
 )
 
 # A revenue/gross-profit/etc. line item is looked up by trying several label spellings,
@@ -128,6 +130,17 @@ class YFinanceMarketData:
     ) -> DividendHistory | None:
         return await asyncio.to_thread(
             self._retrying, self._dividends_sync, symbol.strip().upper(), as_of
+        )
+
+    async def get_price_history(
+        self,
+        symbol: str,
+        range: str = "6mo",
+        interval: str = "1d",
+        as_of: date | None = None,
+    ) -> PriceHistory | None:
+        return await asyncio.to_thread(
+            self._retrying, self._price_history_sync, symbol.strip().upper(), range, interval, as_of
         )
 
     def _retrying(self, func: Callable[..., Any], *args: Any) -> Any:
@@ -267,6 +280,33 @@ class YFinanceMarketData:
             as_of=as_of,
         )
 
+    def _price_history_sync(
+        self, symbol: str, range_: str, interval: str, as_of: date | None
+    ) -> PriceHistory | None:
+        ticker = self._ticker_factory(symbol)
+        history = getattr(ticker, "history", None)
+        if not callable(history):
+            return None
+        frame = history(period=range_, interval=interval)
+        if frame is None or len(frame) == 0 or "Close" not in getattr(frame, "columns", []):
+            return None
+        bars: list[PriceBar] = []
+        for index_value, row in frame.iterrows():
+            bar_date = _to_date(index_value)
+            if bar_date is None or (as_of is not None and bar_date > as_of):
+                continue
+            bars.append(
+                PriceBar(
+                    date=bar_date,
+                    open=_dec(row.get("Open")),
+                    high=_dec(row.get("High")),
+                    low=_dec(row.get("Low")),
+                    close=_dec(row.get("Close")),
+                    volume=_volume(row.get("Volume")),
+                )
+            )
+        return PriceHistory(symbol=symbol, interval=interval, bars=bars, as_of=as_of)
+
     def _history_closes(self, ticker: Any, as_of: date) -> tuple[Decimal | None, Decimal | None]:
         """Return (close at/just before as_of, the close before that), best-effort."""
         history = getattr(ticker, "history", None)
@@ -300,6 +340,11 @@ def _info(ticker: Any) -> dict:
 
 def _currency(info: dict) -> str:
     return info.get("currency") or "USD"
+
+
+def _volume(value: Any) -> int | None:
+    decimal_value = _dec(value)
+    return int(decimal_value) if decimal_value is not None else None
 
 
 def _subtract(a: Decimal | None, b: Decimal | None) -> Decimal | None:

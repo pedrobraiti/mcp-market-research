@@ -32,6 +32,8 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `company_snapshot(symbol, as_of?)` — price, day move, key multiples, sector/industry.
 - `fundamentals(symbol, period?, as_of?)` — income/balance/cash-flow figures + derived margins.
 - `dividends(symbol, as_of?)` — payment history, trailing yield, growth streak, cut flag.
+- `price_history(symbol, period?, interval?, as_of?)` — OHLCV bars.
+- `technicals(symbol, as_of?)` — SMA(50/200), EMA(20), RSI(14), MACD, ATR(14), 52-week high/low (raw numbers, no trend verdict).
 - `filings(symbol, form_type?, limit?, as_of?)` — recent **SEC EDGAR** filings (10-K/10-Q/8-K …) with links to the primary document (authoritative source; needs `SCOUT_SEC_USER_AGENT`).
 - `extract(url)` — fetch a web page and return its **main content as clean markdown** (a research aid; honestly reports paywalls/blocks instead of faking).
 

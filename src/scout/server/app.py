@@ -13,6 +13,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from ..analytics import compute_technicals
 from ..domain.models import Period
 from ..research import build_dossier
 from .services import Services, build_services
@@ -119,6 +120,45 @@ async def dividends(symbol: str, as_of: str | None = None) -> dict:
     try:
         result = await svc.market_data.get_dividends(symbol, _parse_as_of(as_of))
         return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def price_history(
+    symbol: str, period: str = "6mo", interval: str = "1d", as_of: str | None = None
+) -> dict:
+    """OHLCV price history for a US stock/ETF.
+
+    `period` is a yfinance range (e.g. "1mo", "3mo", "6mo", "1y", "2y", "5y", "max");
+    `interval` is the bar size (e.g. "1d", "1wk", "1h", "5m"). Pass `as_of` (YYYY-MM-DD) to
+    truncate at a past date. Returns a list of bars (date + open/high/low/close/volume).
+    """
+    svc = services()
+    try:
+        result = await svc.market_data.get_price_history(
+            symbol, period.strip(), interval.strip(), _parse_as_of(as_of)
+        )
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def technicals(symbol: str, as_of: str | None = None) -> dict:
+    """Technical indicators for a US stock/ETF, computed from ~2y of daily bars.
+
+    Returns last price, SMA(50/200), EMA(20), RSI(14), MACD (line/signal/histogram), ATR(14)
+    and the 52-week high/low. These are **raw numbers, not a verdict** — e.g. it reports RSI and
+    price-vs-SMA, it does not say "overbought" or "uptrend"; you draw the conclusion. Pass `as_of`
+    (YYYY-MM-DD) for a point-in-time read. `data` is null if there isn't enough price history.
+    """
+    svc = services()
+    try:
+        history = await svc.market_data.get_price_history(symbol, "2y", "1d", _parse_as_of(as_of))
+        if history is None or not history.bars:
+            return _ok(None)
+        return _ok(compute_technicals(history).model_dump(mode="json"))
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 

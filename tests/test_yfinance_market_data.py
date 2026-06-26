@@ -74,9 +74,15 @@ class FakeTicker:
         self.cashflow = _CASHFLOW
         self.quarterly_cashflow = _CASHFLOW
 
-    def history(self, start=None, end=None):
+    def history(self, period=None, interval=None, start=None, end=None, **kwargs):
         return pd.DataFrame(
-            {"Close": [221.0, 223.5]},
+            {
+                "Open": [220.0, 221.5],
+                "High": [222.0, 224.0],
+                "Low": [219.0, 221.0],
+                "Close": [221.0, 223.5],
+                "Volume": [1_000_000, 1_100_000],
+            },
             index=[pd.Timestamp("2024-06-10"), pd.Timestamp("2024-06-11")],
         )
 
@@ -172,6 +178,25 @@ async def test_dividends_as_of_filters_and_recomputes():
     assert history.trailing_12m == Decimal("0.23")
     # Only one complete prior year (2021) remains, so a streak can't be established.
     assert history.growth_streak_years is None
+
+
+async def test_price_history_parses_ohlcv_bars():
+    history = await _source().get_price_history("AAPL", "1mo", "1d")
+    assert history is not None
+    assert history.interval == "1d"
+    assert len(history.bars) == 2
+    last = history.bars[1]
+    assert last.date == date(2024, 6, 11)
+    assert last.close == Decimal("223.5")
+    assert last.high == Decimal("224.0")
+    assert last.volume == 1_100_000
+
+
+async def test_price_history_as_of_truncates():
+    history = await _source().get_price_history("AAPL", "1mo", "1d", as_of=date(2024, 6, 10))
+    assert history is not None
+    assert len(history.bars) == 1
+    assert history.bars[0].date == date(2024, 6, 10)
 
 
 async def test_retry_recovers_from_transient_failure():
