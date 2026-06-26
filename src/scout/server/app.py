@@ -229,6 +229,31 @@ async def extract(url: str) -> dict:
         return _err(exc)
 
 
+@mcp.tool()
+async def sec_financials(symbol: str, as_of: str | None = None) -> dict:
+    """Authoritative annual financials for a US company from **SEC EDGAR XBRL**.
+
+    Returns the reported revenue, gross/operating income, net income, total assets and
+    stockholders' equity for the latest fiscal year (10-K) at or before `as_of` (YYYY-MM-DD) —
+    each line tagged with the exact us-gaap concept, period end, form and filing date. Use it to
+    **cross-check** `fundamentals` (which comes from yfinance) against the primary source. `data`
+    is null if the symbol can't be resolved. Requires SCOUT_SEC_USER_AGENT (SEC policy).
+    """
+    svc = services()
+    if svc.financials is None or not svc.settings.sec_user_agent.strip():
+        return _err(
+            ValueError(
+                "Set SCOUT_SEC_USER_AGENT (e.g. 'Your Name you@email.com') — SEC EDGAR "
+                "requires an identifiable User-Agent."
+            )
+        )
+    try:
+        result = await svc.financials.get_financials(symbol, _parse_as_of(as_of))
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
 def main() -> None:
     mcp.run()
 

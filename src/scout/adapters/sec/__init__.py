@@ -1,5 +1,5 @@
-"""SEC EDGAR adapter — authoritative US regulatory filings, straight from the source."""
+"""SEC EDGAR adapter — authoritative US filings and XBRL financials, from the source."""
 
-from .edgar import SecEdgarFilings
+from .edgar import SecEdgar
 
-__all__ = ["SecEdgarFilings"]
+__all__ = ["SecEdgar"]

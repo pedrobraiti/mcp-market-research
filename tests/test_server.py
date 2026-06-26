@@ -13,6 +13,8 @@ from scout.domain.models import (
     Period,
     PriceBar,
     PriceHistory,
+    SecFinancialLine,
+    SecFinancials,
 )
 from scout.server import app as app_module
 from scout.server.services import Services
@@ -55,13 +57,29 @@ class FakeFilings:
         )
 
 
+class FakeFinancials:
+    async def get_financials(self, symbol, as_of=None):
+        return SecFinancials(
+            symbol=symbol.upper(),
+            cik="0000320193",
+            fiscal_year=2024,
+            period_end=date(2024, 9, 28),
+            lines=[
+                SecFinancialLine(concept="revenue", value=Decimal("391035000000"), tag="Revenues")
+            ],
+        )
+
+
 @pytest.fixture
 def use_source():
     previous = app_module._services
 
-    def _install(source, filings=None, settings=None):
+    def _install(source, filings=None, settings=None, financials=None):
         app_module._services = Services(
-            settings=settings or get_settings(), market_data=source, filings=filings
+            settings=settings or get_settings(),
+            market_data=source,
+            filings=filings,
+            financials=financials,
         )
 
     yield _install
@@ -155,6 +173,25 @@ async def test_filings_returns_data_when_configured(use_source):
     assert result["ok"] is True
     assert result["data"]["cik"] == "0000320193"
     assert result["data"]["filings"][0]["form"] == "10-K"
+
+
+async def test_sec_financials_requires_user_agent(use_source):
+    use_source(FakeSource(), financials=FakeFinancials())  # blank UA by default
+    result = await app_module.sec_financials("AAPL")
+    assert result["ok"] is False
+    assert "SCOUT_SEC_USER_AGENT" in result["error"]
+
+
+async def test_sec_financials_returns_data_when_configured(use_source):
+    use_source(
+        FakeSource(),
+        financials=FakeFinancials(),
+        settings=Settings(sec_user_agent="Scout Test test@example.com"),
+    )
+    result = await app_module.sec_financials("aapl")
+    assert result["ok"] is True
+    assert result["data"]["fiscal_year"] == 2024
+    assert result["data"]["lines"][0]["value"] == "391035000000"
 
 
 def test_parse_as_of_handles_blank_and_value():

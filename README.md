@@ -36,6 +36,7 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `technicals(symbol, as_of?)` — SMA(50/200), EMA(20), RSI(14), MACD, ATR(14), 52-week high/low (raw numbers, no trend verdict).
 - `macro_context(as_of?)` — key US macro from **FRED** (Fed Funds, 10Y/2Y yields, 10Y-2Y spread, unemployment, CPI, VIX); no API key needed.
 - `filings(symbol, form_type?, limit?, as_of?)` — recent **SEC EDGAR** filings (10-K/10-Q/8-K …) with links to the primary document (authoritative source; needs `SCOUT_SEC_USER_AGENT`).
+- `sec_financials(symbol, as_of?)` — authoritative annual financials from **SEC EDGAR XBRL** (revenue, income, assets, equity) with per-line provenance — to **cross-check** `fundamentals` against the primary source.
 - `extract(url)` — fetch a web page and return its **main content as clean markdown** (a research aid; honestly reports paywalls/blocks instead of faking).
 
 Every tool returns an `{"ok": ..., "data": ...}` envelope and accepts an optional `as_of`

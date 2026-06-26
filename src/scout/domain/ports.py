@@ -20,6 +20,7 @@ from .models import (
     MacroSnapshot,
     Period,
     PriceHistory,
+    SecFinancials,
 )
 
 
@@ -68,6 +69,15 @@ class FilingsSource(Protocol):
         as_of: date | None = None,
     ) -> FilingsList | None:
         """Recent filings, optionally restricted to ``form_type`` and dated at/before ``as_of``."""
+        ...
+
+
+@runtime_checkable
+class FinancialsSource(Protocol):
+    """Reads of authoritative reported financials (SEC EDGAR XBRL today)."""
+
+    async def get_financials(self, symbol: str, as_of: date | None = None) -> SecFinancials | None:
+        """Latest annual reported figures (with provenance) at or before ``as_of``."""
         ...
 
 

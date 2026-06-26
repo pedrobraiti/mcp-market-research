@@ -181,6 +181,34 @@ class MacroSnapshot(BaseModel):
     as_of: date | None = None
 
 
+class SecFinancialLine(BaseModel):
+    """One reported financial figure from SEC XBRL, with full provenance."""
+
+    concept: str
+    tag: str | None = None
+    value: Decimal | None = None
+    unit: str | None = None
+    period_end: date | None = None
+    fiscal_year: int | None = None
+    form: str | None = None
+    filed: date | None = None
+
+
+class SecFinancials(BaseModel):
+    """Authoritative annual financials from SEC EDGAR XBRL — to cross-check other sources.
+
+    Every line carries which tag/filing/period it came from, so a figure can be audited
+    against the primary document. Raw reported numbers, no derived verdict.
+    """
+
+    symbol: str
+    cik: str | None = None
+    fiscal_year: int | None = None
+    period_end: date | None = None
+    lines: list[SecFinancialLine] = []
+    as_of: date | None = None
+
+
 class ExtractedPage(BaseModel):
     """A web page fetched and reduced to clean, token-efficient markdown.
 

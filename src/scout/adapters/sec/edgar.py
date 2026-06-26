@@ -12,13 +12,40 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from ...domain.models import Filing, FilingsList
+from ...domain.models import Filing, FilingsList, SecFinancialLine, SecFinancials
 
 _TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 _SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 _ARCHIVE_URL = "https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{document}"
+_CONCEPT_URL = "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/us-gaap/{tag}.json"
+
+# Each metric maps to the us-gaap tags companies actually use, tried in order until one hits
+# (different filers tag the same line differently; the first that returns data wins).
+_CONCEPTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "revenue",
+        (
+            "RevenueFromContractWithCustomerExcludingAssessedTax",
+            "Revenues",
+            "RevenueFromContractWithCustomerIncludingAssessedTax",
+            "SalesRevenueNet",
+        ),
+    ),
+    ("gross_profit", ("GrossProfit",)),
+    ("operating_income", ("OperatingIncomeLoss",)),
+    ("net_income", ("NetIncomeLoss",)),
+    ("total_assets", ("Assets",)),
+    (
+        "stockholders_equity",
+        (
+            "StockholdersEquity",
+            "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+        ),
+    ),
+)
 
 
 def _parse_date(value: Any) -> date | None:
@@ -30,7 +57,36 @@ def _parse_date(value: Any) -> date | None:
         return None
 
 
-class SecEdgarFilings:
+def _to_decimal(value: Any) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
+def _pick_annual(observations: list[dict], as_of: date | None) -> dict | None:
+    """Pick the latest full-year (FY, 10-K) observation at or before ``as_of``."""
+    best: dict | None = None
+    best_key: tuple[date, date] | None = None
+    for entry in observations:
+        if str(entry.get("fp")) != "FY":
+            continue
+        if not str(entry.get("form", "")).startswith("10-K"):
+            continue
+        period_end = _parse_date(entry.get("end"))
+        if period_end is None or (as_of is not None and period_end > as_of):
+            continue
+        # Break ties (same period restated by an amendment) by the later filing date.
+        filed = _parse_date(entry.get("filed")) or date.min
+        key = (period_end, filed)
+        if best_key is None or key > best_key:
+            best, best_key = entry, key
+    return best
+
+
+class SecEdgar:
     def __init__(
         self,
         user_agent: str,
@@ -122,3 +178,54 @@ class SecEdgarFilings:
         return FilingsList(
             symbol=symbol_upper, cik=cik, name=(data or {}).get("name"), filings=results
         )
+
+    async def get_financials(
+        self, symbol: str, as_of: date | None = None
+    ) -> SecFinancials | None:
+        symbol_upper = symbol.strip().upper()
+        cik = (await self._ticker_map()).get(symbol_upper)
+        if cik is None:
+            return None
+
+        results = await asyncio.gather(
+            *(self._concept_line(cik, concept, tags, as_of) for concept, tags in _CONCEPTS),
+            return_exceptions=True,
+        )
+        lines = [line for line in results if isinstance(line, SecFinancialLine)]
+        # Anchor the snapshot's fiscal year on a core line (net income, else the first with data).
+        anchor = next(
+            (line for line in lines if line.concept == "net_income" and line.value is not None),
+            next((line for line in lines if line.value is not None), None),
+        )
+        return SecFinancials(
+            symbol=symbol_upper,
+            cik=cik,
+            fiscal_year=anchor.fiscal_year if anchor else None,
+            period_end=anchor.period_end if anchor else None,
+            lines=lines,
+            as_of=as_of,
+        )
+
+    async def _concept_line(
+        self, cik: str, concept: str, tags: tuple[str, ...], as_of: date | None
+    ) -> SecFinancialLine:
+        for tag in tags:
+            try:
+                data = await self._fetch_json(_CONCEPT_URL.format(cik=cik, tag=tag))
+            except Exception:  # noqa: BLE001 — a 404 just means this filer doesn't use the tag
+                continue
+            observations = ((data or {}).get("units") or {}).get("USD") or []
+            entry = _pick_annual(observations, as_of)
+            if entry is None:
+                continue
+            return SecFinancialLine(
+                concept=concept,
+                tag=tag,
+                value=_to_decimal(entry.get("val")),
+                unit="USD",
+                period_end=_parse_date(entry.get("end")),
+                fiscal_year=entry.get("fy") if isinstance(entry.get("fy"), int) else None,
+                form=entry.get("form"),
+                filed=_parse_date(entry.get("filed")),
+            )
+        return SecFinancialLine(concept=concept, value=None)

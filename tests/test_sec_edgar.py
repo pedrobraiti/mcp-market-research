@@ -1,6 +1,7 @@
 from datetime import date
+from decimal import Decimal
 
-from scout.adapters.sec import SecEdgarFilings
+from scout.adapters.sec import SecEdgar
 
 _TICKERS = {
     "0": {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc."},
@@ -27,17 +28,55 @@ _SUBMISSIONS = {
 }
 
 
+def _concept(observations):
+    return {"units": {"USD": observations}}
+
+
+def _annual(fy, end, val, filed):
+    return {"fy": fy, "fp": "FY", "form": "10-K", "end": end, "val": val, "filed": filed}
+
+
+# Apple does NOT use the primary revenue tag — get_financials must fall back to "Revenues".
+_CONCEPTS = {
+    "Revenues": _concept(
+        [
+            _annual(2024, "2024-09-28", 391035000000, "2024-11-01"),
+            _annual(2023, "2023-09-30", 383285000000, "2023-11-03"),
+            {"fy": 2024, "fp": "Q1", "form": "10-Q", "end": "2023-12-30", "val": 1, "filed": "x"},
+        ]
+    ),
+    "GrossProfit": _concept([_annual(2024, "2024-09-28", 180683000000, "2024-11-01")]),
+    "OperatingIncomeLoss": _concept([_annual(2024, "2024-09-28", 123216000000, "2024-11-01")]),
+    "NetIncomeLoss": _concept(
+        [
+            _annual(2024, "2024-09-28", 93736000000, "2024-11-01"),
+            _annual(2023, "2023-09-30", 96995000000, "2023-11-03"),
+        ]
+    ),
+    "Assets": _concept([_annual(2024, "2024-09-28", 364980000000, "2024-11-01")]),
+    "StockholdersEquity": _concept([_annual(2024, "2024-09-28", 56950000000, "2024-11-01")]),
+}
+
+
 def _fetch_factory():
     async def _fetch(url: str) -> dict:
         if "company_tickers" in url:
             return _TICKERS
+        if "/companyconcept/" in url:
+            tag = url.rsplit("/", 1)[-1].removesuffix(".json")
+            if tag in _CONCEPTS:
+                return _CONCEPTS[tag]
+            raise RuntimeError("404 — tag not used by this filer")
         return _SUBMISSIONS
 
     return _fetch
 
 
 def _source():
-    return SecEdgarFilings("Test Agent test@example.com", fetch_json=_fetch_factory())
+    return SecEdgar("Test Agent test@example.com", fetch_json=_fetch_factory())
+
+
+# ---- filings -------------------------------------------------------------------------
 
 
 async def test_resolves_cik_and_returns_filings():
@@ -50,7 +89,6 @@ async def test_resolves_cik_and_returns_filings():
     assert first.form == "10-K"
     assert first.filing_date == date(2024, 11, 1)
     assert first.report_date == date(2024, 9, 28)
-    # URL drops the dashes in the accession and the leading zeros in the CIK path.
     assert first.url == (
         "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm"
     )
@@ -66,7 +104,6 @@ async def test_filters_by_form_type():
 async def test_filters_by_as_of():
     result = await _source().get_filings("AAPL", as_of=date(2024, 9, 1))
     assert result is not None
-    # Only the 2024-08-02 (10-Q) and 2024-07-20 (4) filings are on/before 2024-09-01.
     assert [f.form for f in result.filings] == ["10-Q", "4"]
 
 
@@ -78,3 +115,37 @@ async def test_limit_caps_results():
 
 async def test_unresolved_symbol_returns_none():
     assert await _source().get_filings("NOPE") is None
+
+
+# ---- financials (XBRL cross-check) ---------------------------------------------------
+
+
+async def test_financials_returns_reported_annual_with_provenance():
+    financials = await _source().get_financials("aapl")
+    assert financials is not None
+    assert financials.cik == "0000320193"
+    by_concept = {line.concept: line for line in financials.lines}
+    revenue = by_concept["revenue"]
+    assert revenue.value == Decimal("391035000000")
+    assert revenue.tag == "Revenues"  # fell back from the unused primary tag
+    assert revenue.period_end == date(2024, 9, 28)
+    assert revenue.form == "10-K"
+    assert revenue.filed == date(2024, 11, 1)
+    assert by_concept["net_income"].value == Decimal("93736000000")
+    assert by_concept["stockholders_equity"].value == Decimal("56950000000")
+    assert financials.fiscal_year == 2024
+    assert financials.period_end == date(2024, 9, 28)
+
+
+async def test_financials_as_of_picks_prior_year():
+    financials = await _source().get_financials("AAPL", as_of=date(2024, 1, 1))
+    assert financials is not None
+    by_concept = {line.concept: line for line in financials.lines}
+    assert by_concept["revenue"].value == Decimal("383285000000")
+    assert by_concept["revenue"].period_end == date(2023, 9, 30)
+    # gross_profit only has a FY2024 observation, which is after as_of → no value.
+    assert by_concept["gross_profit"].value is None
+
+
+async def test_financials_unresolved_symbol_returns_none():
+    assert await _source().get_financials("NOPE") is None
