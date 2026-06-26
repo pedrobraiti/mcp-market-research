@@ -109,6 +109,38 @@ class CompanyDossier(BaseModel):
     notes: list[str] = []
 
 
+class ComparisonRow(BaseModel):
+    symbol: str
+    name: str | None = None
+    price: Decimal | None = None
+    market_cap: Decimal | None = None
+    pe_ratio: Decimal | None = None
+    forward_pe: Decimal | None = None
+    dividend_yield: Decimal | None = None
+    revenue: Decimal | None = None
+    net_margin: Decimal | None = None
+    sector: str | None = None
+    note: str | None = None
+
+
+class Comparison(BaseModel):
+    """Several symbols side by side — a parallel gather of snapshot + fundamentals per name."""
+
+    symbols: list[str]
+    as_of: date | None = None
+    rows: list[ComparisonRow] = []
+
+
+class CorrelationMatrix(BaseModel):
+    """Pairwise return correlation between symbols — diversification you can't see per-symbol."""
+
+    symbols: list[str]
+    period: str
+    days: int | None = None
+    matrix: dict[str, dict[str, float | None]] = {}
+    notes: list[str] = []
+
+
 class Filing(BaseModel):
     """A single SEC filing (10-K, 10-Q, 8-K, ...) with a link to the primary document."""
 

@@ -7,6 +7,7 @@ or "overbought" verdict — the agent reads RSI/price-vs-SMA and concludes (see 
 
 from __future__ import annotations
 
+import math
 from decimal import ROUND_HALF_UP, Decimal
 
 from .domain.models import PriceHistory, Technicals
@@ -93,6 +94,25 @@ def atr(
     for i in range(period, len(true_ranges)):
         current = (current * (period - 1) + true_ranges[i]) / period
     return current
+
+
+def pct_returns(closes: list[float]) -> list[float]:
+    """Period-over-period simple returns from a close series."""
+    return [closes[i] / closes[i - 1] - 1 for i in range(1, len(closes)) if closes[i - 1] != 0]
+
+
+def pearson(a: list[float], b: list[float]) -> float | None:
+    """Pearson correlation of two equal-length series; ``None`` if undefined (zero variance)."""
+    n = len(a)
+    if n < 2 or n != len(b):
+        return None
+    mean_a, mean_b = sum(a) / n, sum(b) / n
+    cov = sum((a[i] - mean_a) * (b[i] - mean_b) for i in range(n))
+    var_a = sum((x - mean_a) ** 2 for x in a)
+    var_b = sum((x - mean_b) ** 2 for x in b)
+    if var_a == 0 or var_b == 0:
+        return None
+    return cov / math.sqrt(var_a * var_b)
 
 
 def _q(value: float | None, places: int) -> Decimal | None:

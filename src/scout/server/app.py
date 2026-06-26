@@ -15,7 +15,7 @@ from mcp.server.fastmcp import FastMCP
 
 from ..analytics import compute_technicals
 from ..domain.models import Period
-from ..research import build_dossier
+from ..research import build_comparison, build_correlation, build_dossier
 from .services import Services, build_services
 
 _services: Services | None = None
@@ -64,6 +64,42 @@ async def company_dossier(symbol: str, depth: str = "full", as_of: str | None = 
         return _ok(dossier.model_dump(mode="json"))
     except ValueError as exc:
         return _err(exc)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def compare(symbols: list[str], as_of: str | None = None) -> dict:
+    """Compare several US stocks/ETFs side by side in one call.
+
+    For each symbol, gathers price, market cap, trailing & forward P/E, dividend yield, revenue,
+    net margin and sector (snapshot + fundamentals, in parallel). Pass `as_of` (YYYY-MM-DD) for a
+    point-in-time view. A symbol whose data is unavailable still appears, with a `note`.
+    """
+    svc = services()
+    try:
+        result = await build_comparison(svc.market_data, symbols, _parse_as_of(as_of))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def correlation_matrix(
+    symbols: list[str], period: str = "6mo", as_of: str | None = None
+) -> dict:
+    """Pairwise return correlation between symbols — to see real diversification.
+
+    Fetches each symbol's daily prices over `period`, aligns them on common trading days and
+    returns the Pearson correlation of daily returns for every pair (1.0 = move together,
+    -1.0 = move opposite, ~0 = unrelated). Needs at least two symbols with overlapping history.
+    """
+    svc = services()
+    try:
+        result = await build_correlation(
+            svc.market_data, symbols, period.strip(), _parse_as_of(as_of)
+        )
+        return _ok(result.model_dump(mode="json"))
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 

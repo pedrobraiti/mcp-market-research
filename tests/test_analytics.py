@@ -1,7 +1,16 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from scout.analytics import atr, compute_technicals, ema_last, macd, rsi, sma
+from scout.analytics import (
+    atr,
+    compute_technicals,
+    ema_last,
+    macd,
+    pct_returns,
+    pearson,
+    rsi,
+    sma,
+)
 from scout.domain.models import PriceBar, PriceHistory
 
 
@@ -36,6 +45,19 @@ def test_atr_constant_range():
     closes = list(range(1, 30))
     assert atr(highs, lows, closes, 14) == 2.0
     assert atr([1], [1], [1], 14) is None
+
+
+def test_pct_returns():
+    result = pct_returns([10.0, 11.0, 12.0])
+    assert abs(result[0] - 0.1) < 1e-9
+    assert abs(result[1] - 0.090909) < 1e-5
+
+
+def test_pearson_correlation():
+    assert pearson([1, 2, 3], [2, 4, 6]) == 1.0  # perfectly positively correlated
+    assert pearson([1, 2, 3], [6, 4, 2]) == -1.0  # perfectly negatively correlated
+    assert pearson([1, 2, 3], [1, 1, 1]) is None  # zero variance → undefined
+    assert pearson([1, 2], [1]) is None  # mismatched lengths
 
 
 def _ramp_history(n: int) -> PriceHistory:

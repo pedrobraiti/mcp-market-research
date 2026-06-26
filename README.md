@@ -29,6 +29,8 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 ## Tools (today)
 
 - `company_dossier(symbol, depth?, as_of?)` — flagship: snapshot + fundamentals + dividends gathered **in parallel**, degrades gracefully if one source is down.
+- `compare(symbols[], as_of?)` — several names side by side (price, multiples, margins, sector).
+- `correlation_matrix(symbols[], period?, as_of?)` — pairwise return correlation (real diversification).
 - `company_snapshot(symbol, as_of?)` — price, day move, key multiples, sector/industry.
 - `fundamentals(symbol, period?, as_of?)` — income/balance/cash-flow figures + derived margins.
 - `dividends(symbol, as_of?)` — payment history, trailing yield, growth streak, cut flag.
