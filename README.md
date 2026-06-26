@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/status-live--validated-success" alt="Status: live-validated">
 </p>
 
-> ⚠️ **Not financial advice.** A research and data-gathering tool. It does **not** place orders and
+> **Not financial advice.** A research and data-gathering tool. It does **not** place orders and
 > does **not** decide what to buy — that is the agent's and `mcp-ibkr-agent`'s job. Use at your own risk.
 
 ## What this is
@@ -28,9 +28,9 @@ parallel, returned as typed, structured data.
 
 It is the **senses** layer of a three-part split:
 
-- 🧠 **Brain** — the agent (Claude Code), reasoning over the data and deciding *what/when* to invest.
-- 👁️ **Senses** — **Scout** (this repo): data & info gathering. **Stateless, data-only.**
-- ✋ **Hands** — [`mcp-ibkr-agent`](https://github.com/pedrobraiti/mcp-ibkr-agent): execution on Interactive Brokers.
+- **Brain** — the agent (Claude Code), reasoning over the data and deciding *what/when* to invest.
+- **Senses** — **Scout** (this repo): data & info gathering. **Stateless, data-only.**
+- **Hands** — [`mcp-ibkr-agent`](https://github.com/pedrobraiti/mcp-ibkr-agent): execution on Interactive Brokers.
 
 Scope: primarily **US equities & ETFs** (what the broker can trade). Every tool returns an
 `{"ok": ..., "data": ...}` envelope and most accept an optional `as_of` (point-in-time) date.
