@@ -34,6 +34,7 @@ from .models import (
     SymbolSearch,
     TreasuryData,
     WebNewsSearch,
+    WikipediaAttention,
     WorldBankData,
 )
 
@@ -176,6 +177,15 @@ class RetailBuzzSource(Protocol):
 
     async def get_buzz(self, symbol: str | None = None, limit: int = 20) -> RetailBuzz:
         """Trending tickers by Reddit mentions, or one symbol's buzz if given."""
+        ...
+
+
+@runtime_checkable
+class AttentionSource(Protocol):
+    """Wikipedia pageviews as an attention proxy (Wikimedia today)."""
+
+    async def get_pageviews(self, article: str, days: int = 30) -> WikipediaAttention:
+        """Daily pageviews for a Wikipedia article over the last ``days``."""
         ...
 
 

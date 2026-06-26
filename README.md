@@ -48,6 +48,7 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `analyst_view(symbol)` — sell-side consensus & price targets (third-party opinion, as data).
 - `ownership(symbol)` — insider & institution %, top institutions, recent insider trades (13F/Form 4).
 - `retail_buzz(symbol?, limit?)` — Reddit (WSB/stocks) mention buzz (**ApeWisdom**, keyless) — retail attention.
+- `wikipedia_attention(article, days?)` — daily **Wikipedia** pageviews (keyless) — an attention proxy.
 - `price_history(symbol, period?, interval?, as_of?)` — OHLCV bars.
 - `technicals(symbol, as_of?)` — SMA(50/200), EMA(20), RSI(14), MACD, ATR(14), 52-week high/low (raw numbers, no trend verdict).
 - `sector_performance(period?, as_of?)` — total return of each US sector (via SPDR ETFs) — rotation.
@@ -56,6 +57,7 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `world_macro(country?, codes?)` — country-level macro from the **World Bank** (GDP, inflation, unemployment…), keyless.
 - `treasury_data()` — official US **Treasury** figures (total public debt, average interest rates), keyless.
 - `filings(symbol, form_type?, limit?, as_of?)` — recent **SEC EDGAR** filings (10-K/10-Q/8-K …) with links to the primary document (authoritative source; needs `SCOUT_SEC_USER_AGENT`).
+- `filing_search(query, forms?, limit?)` — full-text search across **all** EDGAR filings — discover companies by what they disclose (thesis → names).
 - `sec_financials(symbol, as_of?)` — authoritative annual financials from **SEC EDGAR XBRL** (revenue, income, assets, equity) with per-line provenance — to **cross-check** `fundamentals` against the primary source.
 - `extract(url)` — fetch a web page and return its **main content as clean markdown** (a research aid; honestly reports paywalls/blocks instead of faking).
 

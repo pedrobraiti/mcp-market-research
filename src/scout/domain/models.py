@@ -509,6 +509,21 @@ class TreasuryData(BaseModel):
     figures: list[TreasuryFigure] = []
 
 
+class PageviewDay(BaseModel):
+    day: date
+    views: int | None = None
+
+
+class WikipediaAttention(BaseModel):
+    """Daily Wikipedia pageviews for an article — an official, stable attention proxy."""
+
+    article: str
+    days: int
+    total_views: int | None = None
+    items: list[PageviewDay] = []
+    note: str | None = None
+
+
 class RetailBuzzItem(BaseModel):
     symbol: str
     name: str | None = None

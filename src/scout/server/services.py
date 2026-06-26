@@ -16,10 +16,12 @@ from ..adapters.sec import SecEdgar
 from ..adapters.stooq import StooqPrices
 from ..adapters.treasury import TreasuryFiscal
 from ..adapters.web import WebExtractor
+from ..adapters.wikimedia import WikimediaPageviews
 from ..adapters.worldbank import WorldBankMacro
 from ..adapters.yfinance import YFinanceMarketData
 from ..config import Settings, get_settings
 from ..domain.ports import (
+    AttentionSource,
     ContentExtractor,
     FilingsSource,
     FinancialsSource,
@@ -44,6 +46,7 @@ class Services:
     retail_buzz: RetailBuzzSource | None = None
     world_macro: WorldMacroSource | None = None
     treasury: TreasurySource | None = None
+    attention: AttentionSource | None = None
 
 
 def build_services(settings: Settings | None = None) -> Services:
@@ -62,4 +65,5 @@ def build_services(settings: Settings | None = None) -> Services:
         retail_buzz=ApeWisdomBuzz(timeout=timeout),
         world_macro=WorldBankMacro(timeout=timeout),
         treasury=TreasuryFiscal(timeout=timeout),
+        attention=WikimediaPageviews(timeout=timeout),
     )

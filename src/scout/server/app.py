@@ -418,6 +418,24 @@ async def retail_buzz(symbol: str | None = None, limit: int = 20) -> dict:
 
 
 @mcp.tool()
+async def wikipedia_attention(article: str, days: int = 30) -> dict:
+    """Daily Wikipedia pageviews for an article — an attention proxy (keyless, official).
+
+    Pass the exact Wikipedia article title (e.g. "Tesla, Inc.", "NVIDIA"). Returns daily views
+    over the last `days` plus the total — rising views mean a name is in the public eye. Like
+    Google Trends but stable and keyless. Raw counts, not a signal verdict.
+    """
+    svc = services()
+    if svc.attention is None:
+        return _err(ValueError("Attention source is not configured."))
+    try:
+        result = await svc.attention.get_pageviews(article, int(days))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def ownership(symbol: str) -> dict:
     """Who owns the stock: insider & institution %, top institutions, recent insider trades.
 
