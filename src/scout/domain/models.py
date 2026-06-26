@@ -167,6 +167,20 @@ class Technicals(BaseModel):
     bars_used: int | None = None
 
 
+class MacroIndicator(BaseModel):
+    series_id: str
+    name: str
+    value: Decimal | None = None
+    observation_date: date | None = None
+
+
+class MacroSnapshot(BaseModel):
+    """A snapshot of key macro indicators (rates, spread, unemployment, CPI, VIX)."""
+
+    indicators: list[MacroIndicator] = []
+    as_of: date | None = None
+
+
 class ExtractedPage(BaseModel):
     """A web page fetched and reduced to clean, token-efficient markdown.
 

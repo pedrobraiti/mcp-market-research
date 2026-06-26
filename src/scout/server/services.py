@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..adapters.fred import FredMacro
 from ..adapters.sec import SecEdgarFilings
 from ..adapters.web import WebExtractor
 from ..adapters.yfinance import YFinanceMarketData
 from ..config import Settings, get_settings
-from ..domain.ports import ContentExtractor, FilingsSource, MarketDataSource
+from ..domain.ports import ContentExtractor, FilingsSource, MacroSource, MarketDataSource
 
 
 @dataclass
@@ -21,6 +22,7 @@ class Services:
     market_data: MarketDataSource
     filings: FilingsSource | None = None
     extractor: ContentExtractor | None = None
+    macro: MacroSource | None = None
 
 
 def build_services(settings: Settings | None = None) -> Services:
@@ -31,4 +33,5 @@ def build_services(settings: Settings | None = None) -> Services:
         market_data=YFinanceMarketData(),
         filings=SecEdgarFilings(settings.sec_user_agent, timeout=timeout),
         extractor=WebExtractor(settings.web_user_agent, timeout=timeout),
+        macro=FredMacro(timeout=timeout),
     )

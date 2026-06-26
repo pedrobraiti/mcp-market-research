@@ -34,6 +34,7 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `dividends(symbol, as_of?)` — payment history, trailing yield, growth streak, cut flag.
 - `price_history(symbol, period?, interval?, as_of?)` — OHLCV bars.
 - `technicals(symbol, as_of?)` — SMA(50/200), EMA(20), RSI(14), MACD, ATR(14), 52-week high/low (raw numbers, no trend verdict).
+- `macro_context(as_of?)` — key US macro from **FRED** (Fed Funds, 10Y/2Y yields, 10Y-2Y spread, unemployment, CPI, VIX); no API key needed.
 - `filings(symbol, form_type?, limit?, as_of?)` — recent **SEC EDGAR** filings (10-K/10-Q/8-K …) with links to the primary document (authoritative source; needs `SCOUT_SEC_USER_AGENT`).
 - `extract(url)` — fetch a web page and return its **main content as clean markdown** (a research aid; honestly reports paywalls/blocks instead of faking).
 
@@ -55,7 +56,7 @@ server/      MCP server (FastMCP) + dependency composition
 
 - **Python 3.12+**
 - **MCP server** (FastMCP)
-- Free data sources first: **yfinance** (live), then **SEC EDGAR**, **FRED**, **stooq** (paid free-tiers like Finnhub/FMP/Alpha Vantage are pluggable later)
+- Free data sources: **yfinance** (market/fundamentals/dividends/prices), **SEC EDGAR** (filings), **FRED** (macro, keyless) — all live. stooq and paid free-tiers (Finnhub/FMP/Alpha Vantage) are pluggable later.
 
 ## Develop
 

@@ -192,6 +192,24 @@ async def filings(
 
 
 @mcp.tool()
+async def macro_context(as_of: str | None = None) -> dict:
+    """Key US macro indicators (from FRED): policy rate, the yield curve, jobs, inflation, vol.
+
+    Returns the latest value and date of each series — Fed Funds rate, 10Y & 2Y Treasury yields,
+    the 10Y-2Y spread, unemployment, CPI (index) and the VIX. Pass `as_of` (YYYY-MM-DD) for a
+    point-in-time read. Raw levels, not a regime call — you interpret risk-on/off from the numbers.
+    """
+    svc = services()
+    if svc.macro is None:
+        return _err(ValueError("Macro source is not configured."))
+    try:
+        snapshot = await svc.macro.get_macro_context(_parse_as_of(as_of))
+        return _ok(snapshot.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def extract(url: str) -> dict:
     """Fetch a web page and return its main content as clean, token-efficient markdown.
 

@@ -17,6 +17,7 @@ from .models import (
     ExtractedPage,
     FilingsList,
     Fundamentals,
+    MacroSnapshot,
     Period,
     PriceHistory,
 )
@@ -67,6 +68,15 @@ class FilingsSource(Protocol):
         as_of: date | None = None,
     ) -> FilingsList | None:
         """Recent filings, optionally restricted to ``form_type`` and dated at/before ``as_of``."""
+        ...
+
+
+@runtime_checkable
+class MacroSource(Protocol):
+    """Reads of macro indicators (FRED today)."""
+
+    async def get_macro_context(self, as_of: date | None = None) -> MacroSnapshot:
+        """Latest value of each key macro series, at or before ``as_of``."""
         ...
 
 
