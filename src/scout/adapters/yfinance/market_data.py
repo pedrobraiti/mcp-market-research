@@ -299,6 +299,7 @@ class YFinanceMarketData:
 
         info = _info(ticker)
         reference = as_of or date.today()
+        next_ex = _from_unix(info.get("exDividendDate")) if info else None
         trailing_12m = _trailing_sum(payments, reference)
         price = _dec(info.get("currentPrice") or info.get("regularMarketPrice")) if info else None
         annual = _annual_totals(payments)
@@ -309,6 +310,7 @@ class YFinanceMarketData:
             trailing_yield=_ratio(trailing_12m, price, 6),
             growth_streak_years=_growth_streak(annual, reference.year),
             had_cut=_had_cut(annual),
+            next_ex_dividend=next_ex.date() if next_ex else None,
             payments=payments,
             as_of=as_of,
         )

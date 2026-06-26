@@ -103,6 +103,7 @@ class DividendHistory(BaseModel):
     had_cut: bool | None = Field(
         default=None, description="Whether any year-over-year cut is present in the history."
     )
+    next_ex_dividend: date | None = None
     payments: list[DividendPayment] = []
     as_of: date | None = None
 
@@ -127,6 +128,52 @@ class Comparison(BaseModel):
     symbols: list[str]
     as_of: date | None = None
     rows: list[ComparisonRow] = []
+
+
+class ClassificationItem(BaseModel):
+    symbol: str
+    name: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    market_cap: Decimal | None = None
+    note: str | None = None
+
+
+class Classification(BaseModel):
+    """Sector/industry/cap per symbol, in one call — for the agent to aggregate exposure."""
+
+    items: list[ClassificationItem] = []
+    as_of: date | None = None
+
+
+class DigestNewsItem(BaseModel):
+    symbol: str
+    title: str | None = None
+    publisher: str | None = None
+    published: datetime | None = None
+    url: str | None = None
+
+
+class NewsDigest(BaseModel):
+    """Material headlines across several symbols in one call, newest first."""
+
+    symbols: list[str]
+    items: list[DigestNewsItem] = []
+    notes: list[str] = []
+
+
+class CalendarEvent(BaseModel):
+    symbol: str
+    type: str  # "earnings" | "ex_dividend"
+    date: date
+
+
+class MarketCalendar(BaseModel):
+    """Upcoming earnings and ex-dividend dates across several symbols, sorted by date."""
+
+    symbols: list[str]
+    events: list[CalendarEvent] = []
+    notes: list[str] = []
 
 
 class CorrelationMatrix(BaseModel):

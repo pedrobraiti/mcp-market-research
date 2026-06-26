@@ -32,6 +32,9 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `search_symbols(query, limit?)` — resolve a company name / partial ticker to symbols (the entry point).
 - `compare(symbols[], as_of?)` — several names side by side (price, multiples, margins, sector).
 - `correlation_matrix(symbols[], period?, as_of?)` — pairwise return correlation (real diversification).
+- `classify(symbols[], as_of?)` — sector/industry/market-cap per symbol (to aggregate exposure).
+- `news_digest(symbols[], limit_per_symbol?)` — headlines across a watchlist, newest first.
+- `calendar(symbols[], as_of?)` — upcoming earnings & ex-dividend dates across symbols, sorted.
 - `company_snapshot(symbol, as_of?)` — price, day move, key multiples, sector/industry.
 - `fundamentals(symbol, period?, as_of?)` — income/balance/cash-flow figures + derived margins.
 - `dividends(symbol, as_of?)` — payment history, trailing yield, growth streak, cut flag.

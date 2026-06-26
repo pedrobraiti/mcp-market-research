@@ -15,7 +15,14 @@ from mcp.server.fastmcp import FastMCP
 
 from ..analytics import compute_technicals
 from ..domain.models import Period
-from ..research import build_comparison, build_correlation, build_dossier
+from ..research import (
+    build_calendar,
+    build_classification,
+    build_comparison,
+    build_correlation,
+    build_dossier,
+    build_news_digest,
+)
 from .services import Services, build_services
 
 _services: Services | None = None
@@ -95,6 +102,52 @@ async def compare(symbols: list[str], as_of: str | None = None) -> dict:
     svc = services()
     try:
         result = await build_comparison(svc.market_data, symbols, _parse_as_of(as_of))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def classify(symbols: list[str], as_of: str | None = None) -> dict:
+    """Sector, industry and market cap for several symbols in one call.
+
+    The building block for "how much of my book is tech?": this returns the classification
+    per symbol so the agent can aggregate exposure (the agent owns the position sizes; Scout
+    just labels the names). A symbol whose data is missing gets a `note`.
+    """
+    svc = services()
+    try:
+        result = await build_classification(svc.market_data, symbols, _parse_as_of(as_of))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def news_digest(symbols: list[str], limit_per_symbol: int = 5) -> dict:
+    """Recent headlines across several symbols in one call, newest first.
+
+    For "any news that affects what I hold?" over a whole watchlist/portfolio — each item is
+    tagged with its symbol and carries a link you can pass to `extract`. Headlines only.
+    """
+    svc = services()
+    try:
+        result = await build_news_digest(svc.market_data, symbols, int(limit_per_symbol))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def calendar(symbols: list[str], as_of: str | None = None) -> dict:
+    """Upcoming earnings and ex-dividend dates across several symbols, sorted by date.
+
+    Answers "what's coming up for my positions this week?" in one call. Pass `as_of`
+    (YYYY-MM-DD) to treat that date as "now". Returns events (symbol, type, date) only.
+    """
+    svc = services()
+    try:
+        result = await build_calendar(svc.market_data, symbols, _parse_as_of(as_of))
         return _ok(result.model_dump(mode="json"))
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
