@@ -483,6 +483,24 @@ async def macro_context(as_of: str | None = None) -> dict:
 
 
 @mcp.tool()
+async def news_search(query: str, limit: int = 20, days: int = 7) -> dict:
+    """Free-text news/event search across global media (GDELT) — by THEME or company name.
+
+    Unlike `news` (which needs a ticker), this searches worldwide coverage for any query — a
+    thesis ("AI data center power"), an event, or a company name — over the last `days`. Returns
+    articles (title, source, date, link) to read via `extract`. Capture only, no sentiment score.
+    """
+    svc = services()
+    if svc.news_search is None:
+        return _err(ValueError("News search is not configured."))
+    try:
+        result = await svc.news_search.search_news(query, int(limit), int(days))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def extract(url: str) -> dict:
     """Fetch a web page and return its main content as clean, token-efficient markdown.
 

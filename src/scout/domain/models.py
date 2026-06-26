@@ -481,6 +481,22 @@ class OptionsVolatility(BaseModel):
     note: str | None = None
 
 
+class WebNewsItem(BaseModel):
+    title: str | None = None
+    domain: str | None = None
+    url: str | None = None
+    published: datetime | None = None
+    language: str | None = None
+    country: str | None = None
+
+
+class WebNewsSearch(BaseModel):
+    """Free-text news/event search across global media (GDELT) — by theme or company name."""
+
+    query: str
+    items: list[WebNewsItem] = []
+
+
 class ExtractedPage(BaseModel):
     """A web page fetched and reduced to clean, token-efficient markdown.
 

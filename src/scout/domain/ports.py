@@ -30,6 +30,7 @@ from .models import (
     QualityMetrics,
     SecFinancials,
     SymbolSearch,
+    WebNewsSearch,
 )
 
 
@@ -136,6 +137,17 @@ class MacroSource(Protocol):
 
     async def get_macro_context(self, as_of: date | None = None) -> MacroSnapshot:
         """Latest value of each key macro series, at or before ``as_of``."""
+        ...
+
+
+@runtime_checkable
+class NewsSearchSource(Protocol):
+    """Free-text news/event search across global media (GDELT today)."""
+
+    async def search_news(
+        self, query: str, limit: int = 20, days: int = 7
+    ) -> WebNewsSearch:
+        """Recent articles matching a free-text query within the last ``days``."""
         ...
 
 

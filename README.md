@@ -42,6 +42,7 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `relative_strength(symbols[], benchmark?, period?, as_of?)` — each name's return vs a benchmark.
 - `dividends(symbol, as_of?)` — payment history, trailing yield, growth streak, cut flag.
 - `news(symbol, limit?)` — recent headlines (title, publisher, date, link) — pairs with `extract`.
+- `news_search(query, limit?, days?)` — free-text news/event search across global media (**GDELT**, keyless) — by theme or company name.
 - `earnings(symbol, as_of?)` — next earnings date + history (estimate / actual / surprise).
 - `options_volatility(symbol, expiry?)` — ATM implied vol + options-implied expected move to expiry.
 - `analyst_view(symbol)` — sell-side consensus & price targets (third-party opinion, as data).

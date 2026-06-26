@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..adapters.fred import FredMacro
+from ..adapters.gdelt import GdeltNewsSearch
 from ..adapters.price_fallback import PriceFallbackMarketData
 from ..adapters.sec import SecEdgar
 from ..adapters.stooq import StooqPrices
@@ -21,6 +22,7 @@ from ..domain.ports import (
     FinancialsSource,
     MacroSource,
     MarketDataSource,
+    NewsSearchSource,
 )
 
 
@@ -32,6 +34,7 @@ class Services:
     financials: FinancialsSource | None = None
     extractor: ContentExtractor | None = None
     macro: MacroSource | None = None
+    news_search: NewsSearchSource | None = None
 
 
 def build_services(settings: Settings | None = None) -> Services:
@@ -46,4 +49,5 @@ def build_services(settings: Settings | None = None) -> Services:
         financials=sec,
         extractor=WebExtractor(settings.web_user_agent, timeout=timeout),
         macro=FredMacro(timeout=timeout),
+        news_search=GdeltNewsSearch(timeout=timeout),
     )
