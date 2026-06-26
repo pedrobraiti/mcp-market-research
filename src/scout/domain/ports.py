@@ -12,12 +12,15 @@ from datetime import date
 from typing import Protocol, runtime_checkable
 
 from .models import (
+    AnalystView,
     CompanySnapshot,
     DividendHistory,
+    EarningsInfo,
     ExtractedPage,
     FilingsList,
     Fundamentals,
     MacroSnapshot,
+    NewsList,
     Period,
     PriceHistory,
     SecFinancials,
@@ -54,6 +57,18 @@ class MarketDataSource(Protocol):
         as_of: date | None = None,
     ) -> PriceHistory | None:
         """OHLCV bars over ``range`` at ``interval``, truncated at/before ``as_of``."""
+        ...
+
+    async def get_news(self, symbol: str, limit: int = 10) -> NewsList | None:
+        """Recent news headlines (title, publisher, date, url) for a symbol."""
+        ...
+
+    async def get_earnings(self, symbol: str, as_of: date | None = None) -> EarningsInfo | None:
+        """Upcoming earnings date and history (estimate / actual / surprise)."""
+        ...
+
+    async def get_analyst_view(self, symbol: str) -> AnalystView | None:
+        """Sell-side consensus rating and price targets (third-party opinion, as data)."""
         ...
 
 

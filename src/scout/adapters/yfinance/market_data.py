@@ -14,15 +14,20 @@ import asyncio
 import math
 import time
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from ...domain.models import (
+    AnalystView,
     CompanySnapshot,
     DividendHistory,
     DividendPayment,
+    EarningsEvent,
+    EarningsInfo,
     Fundamentals,
+    NewsItem,
+    NewsList,
     Period,
     PriceBar,
     PriceHistory,
@@ -142,6 +147,19 @@ class YFinanceMarketData:
         return await asyncio.to_thread(
             self._retrying, self._price_history_sync, symbol.strip().upper(), range, interval, as_of
         )
+
+    async def get_news(self, symbol: str, limit: int = 10) -> NewsList | None:
+        return await asyncio.to_thread(
+            self._retrying, self._news_sync, symbol.strip().upper(), max(1, min(limit, 50))
+        )
+
+    async def get_earnings(self, symbol: str, as_of: date | None = None) -> EarningsInfo | None:
+        return await asyncio.to_thread(
+            self._retrying, self._earnings_sync, symbol.strip().upper(), as_of
+        )
+
+    async def get_analyst_view(self, symbol: str) -> AnalystView | None:
+        return await asyncio.to_thread(self._retrying, self._analyst_sync, symbol.strip().upper())
 
     def _retrying(self, func: Callable[..., Any], *args: Any) -> Any:
         """Call a blocking fetch, retrying transient failures with exponential backoff.
@@ -307,6 +325,81 @@ class YFinanceMarketData:
             )
         return PriceHistory(symbol=symbol, interval=interval, bars=bars, as_of=as_of)
 
+    def _news_sync(self, symbol: str, limit: int) -> NewsList:
+        ticker = self._ticker_factory(symbol)
+        raw = getattr(ticker, "news", None) or []
+        items: list[NewsItem] = []
+        for entry in raw[:limit]:
+            if not isinstance(entry, dict):
+                continue
+            content = entry.get("content") if isinstance(entry.get("content"), dict) else None
+            if content:  # newer yfinance schema
+                items.append(
+                    NewsItem(
+                        title=content.get("title"),
+                        summary=content.get("summary") or content.get("description"),
+                        url=_nested(content, "canonicalUrl", "url")
+                        or _nested(content, "clickThroughUrl", "url"),
+                        publisher=_nested(content, "provider", "displayName"),
+                        published=_parse_datetime(content.get("pubDate")),
+                    )
+                )
+            else:  # older flat schema
+                items.append(
+                    NewsItem(
+                        title=entry.get("title"),
+                        summary=entry.get("summary"),
+                        url=entry.get("link"),
+                        publisher=entry.get("publisher"),
+                        published=_from_unix(entry.get("providerPublishTime")),
+                    )
+                )
+        return NewsList(symbol=symbol, items=items)
+
+    def _earnings_sync(self, symbol: str, as_of: date | None) -> EarningsInfo:
+        ticker = self._ticker_factory(symbol)
+        getter = getattr(ticker, "get_earnings_dates", None)
+        frame = getter(limit=16) if callable(getter) else getattr(ticker, "earnings_dates", None)
+        if frame is None or getattr(frame, "empty", True):
+            return EarningsInfo(symbol=symbol)
+        reference = as_of or date.today()
+        events: list[EarningsEvent] = []
+        next_date: date | None = None
+        for index_value, row in frame.iterrows():
+            event_date = _to_date(index_value)
+            reported = _dec(row.get("Reported EPS"))
+            is_future = reported is None and (event_date is None or event_date >= reference)
+            events.append(
+                EarningsEvent(
+                    event_date=event_date,
+                    eps_estimate=_dec(row.get("EPS Estimate")),
+                    eps_reported=reported,
+                    surprise_percent=_dec(row.get("Surprise(%)")),
+                    is_future=is_future,
+                )
+            )
+            if is_future and event_date is not None:
+                if next_date is None or event_date < next_date:
+                    next_date = event_date
+        events.sort(key=lambda e: e.event_date or date.min)
+        return EarningsInfo(symbol=symbol, next_earnings_date=next_date, events=events)
+
+    def _analyst_sync(self, symbol: str) -> AnalystView | None:
+        info = _info(self._ticker_factory(symbol))
+        if not info:
+            return None
+        return AnalystView(
+            symbol=symbol,
+            recommendation_key=info.get("recommendationKey"),
+            recommendation_mean=_dec(info.get("recommendationMean")),
+            number_of_analysts=_int(info.get("numberOfAnalystOpinions")),
+            current_price=_dec(info.get("currentPrice") or info.get("regularMarketPrice")),
+            target_mean=_dec(info.get("targetMeanPrice")),
+            target_median=_dec(info.get("targetMedianPrice")),
+            target_high=_dec(info.get("targetHighPrice")),
+            target_low=_dec(info.get("targetLowPrice")),
+        )
+
     def _history_closes(self, ticker: Any, as_of: date) -> tuple[Decimal | None, Decimal | None]:
         """Return (close at/just before as_of, the close before that), best-effort."""
         history = getattr(ticker, "history", None)
@@ -345,6 +438,36 @@ def _currency(info: dict) -> str:
 def _volume(value: Any) -> int | None:
     decimal_value = _dec(value)
     return int(decimal_value) if decimal_value is not None else None
+
+
+def _int(value: Any) -> int | None:
+    decimal_value = _dec(value)
+    return int(decimal_value) if decimal_value is not None else None
+
+
+def _nested(data: dict, *keys: str) -> Any:
+    current: Any = data
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current if isinstance(current, str) else None
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _from_unix(value: Any) -> datetime | None:
+    try:
+        return datetime.fromtimestamp(int(value), tz=UTC) if value else None
+    except (ValueError, TypeError, OSError):
+        return None
 
 
 def _subtract(a: Decimal | None, b: Decimal | None) -> Decimal | None:

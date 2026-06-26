@@ -34,6 +34,9 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `company_snapshot(symbol, as_of?)` — price, day move, key multiples, sector/industry.
 - `fundamentals(symbol, period?, as_of?)` — income/balance/cash-flow figures + derived margins.
 - `dividends(symbol, as_of?)` — payment history, trailing yield, growth streak, cut flag.
+- `news(symbol, limit?)` — recent headlines (title, publisher, date, link) — pairs with `extract`.
+- `earnings(symbol, as_of?)` — next earnings date + history (estimate / actual / surprise).
+- `analyst_view(symbol)` — sell-side consensus & price targets (third-party opinion, as data).
 - `price_history(symbol, period?, interval?, as_of?)` — OHLCV bars.
 - `technicals(symbol, as_of?)` — SMA(50/200), EMA(20), RSI(14), MACD, ATR(14), 52-week high/low (raw numbers, no trend verdict).
 - `macro_context(as_of?)` — key US macro from **FRED** (Fed Funds, 10Y/2Y yields, 10Y-2Y spread, unemployment, CPI, VIX); no API key needed.

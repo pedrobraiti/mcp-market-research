@@ -9,7 +9,7 @@ a "what changed since I bought?" diff — Scout never stores the date, it receiv
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -239,6 +239,53 @@ class SecFinancials(BaseModel):
     period_end: date | None = None
     lines: list[SecFinancialLine] = []
     as_of: date | None = None
+
+
+class NewsItem(BaseModel):
+    title: str | None = None
+    publisher: str | None = None
+    published: datetime | None = None
+    url: str | None = None
+    summary: str | None = None
+
+
+class NewsList(BaseModel):
+    """Recent headlines for a symbol — links the agent can then `extract` and read in full."""
+
+    symbol: str
+    items: list[NewsItem] = []
+
+
+class EarningsEvent(BaseModel):
+    event_date: date | None = None
+    eps_estimate: Decimal | None = None
+    eps_reported: Decimal | None = None
+    surprise_percent: Decimal | None = None
+    is_future: bool | None = None
+
+
+class EarningsInfo(BaseModel):
+    """Earnings calendar and history: upcoming dates plus past estimate/actual/surprise."""
+
+    symbol: str
+    next_earnings_date: date | None = None
+    events: list[EarningsEvent] = []
+
+
+class AnalystView(BaseModel):
+    """What sell-side analysts say — third-party opinion reported as data, NOT Scout's verdict."""
+
+    symbol: str
+    recommendation_key: str | None = None
+    recommendation_mean: Decimal | None = Field(
+        default=None, description="Consensus 1=strong buy … 5=sell (as reported)."
+    )
+    number_of_analysts: int | None = None
+    current_price: Decimal | None = None
+    target_mean: Decimal | None = None
+    target_median: Decimal | None = None
+    target_high: Decimal | None = None
+    target_low: Decimal | None = None
 
 
 class ExtractedPage(BaseModel):

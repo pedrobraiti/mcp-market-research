@@ -228,6 +228,53 @@ async def filings(
 
 
 @mcp.tool()
+async def news(symbol: str, limit: int = 10) -> dict:
+    """Recent news headlines for a US stock/ETF: title, publisher, date and a link.
+
+    Returns the latest items so you can scan what's moving a name — and pass an interesting
+    `url` to `extract` to read the full story. Headlines only; it does not score sentiment.
+    """
+    svc = services()
+    try:
+        result = await svc.market_data.get_news(symbol, int(limit))
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def earnings(symbol: str, as_of: str | None = None) -> dict:
+    """Earnings calendar and history for a US company.
+
+    Returns the next earnings date and past events with EPS estimate, reported EPS and the
+    surprise %. Pass `as_of` (YYYY-MM-DD) to treat that date as "now" when splitting
+    upcoming vs past. Useful to know if a binary event is near before acting on a name.
+    """
+    svc = services()
+    try:
+        result = await svc.market_data.get_earnings(symbol, _parse_as_of(as_of))
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def analyst_view(symbol: str) -> dict:
+    """Sell-side analyst consensus and price targets for a US stock.
+
+    Returns the consensus recommendation (key + mean, 1=strong buy … 5=sell), the number of
+    analysts, and mean/median/high/low price targets vs the current price. This is **what
+    third-party analysts say, reported as data** — not Scout's recommendation; you weigh it.
+    """
+    svc = services()
+    try:
+        result = await svc.market_data.get_analyst_view(symbol)
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def macro_context(as_of: str | None = None) -> dict:
     """Key US macro indicators (from FRED): policy rate, the yield curve, jobs, inflation, vol.
 

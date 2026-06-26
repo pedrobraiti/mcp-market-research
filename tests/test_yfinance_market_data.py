@@ -20,7 +20,26 @@ _INFO = {
     "fiftyTwoWeekLow": 164.0,
     "sector": "Technology",
     "industry": "Consumer Electronics",
+    "recommendationKey": "buy",
+    "recommendationMean": 2.1,
+    "numberOfAnalystOpinions": 35,
+    "targetMeanPrice": 290.0,
+    "targetMedianPrice": 295.0,
+    "targetHighPrice": 340.0,
+    "targetLowPrice": 200.0,
 }
+
+_NEWS = [
+    {
+        "content": {
+            "title": "Apple unveils new chip",
+            "summary": "The company announced a faster processor.",
+            "canonicalUrl": {"url": "https://news.example/aapl-chip"},
+            "provider": {"displayName": "Reuters"},
+            "pubDate": "2026-06-20T14:30:00Z",
+        }
+    }
+]
 
 _INCOME = pd.DataFrame(
     {
@@ -73,6 +92,17 @@ class FakeTicker:
         self.quarterly_balance_sheet = _BALANCE
         self.cashflow = _CASHFLOW
         self.quarterly_cashflow = _CASHFLOW
+        self.news = _NEWS
+
+    def get_earnings_dates(self, limit=12):
+        return pd.DataFrame(
+            {
+                "EPS Estimate": [1.50, 1.40],
+                "Reported EPS": [float("nan"), 1.46],
+                "Surprise(%)": [float("nan"), 4.3],
+            },
+            index=[pd.Timestamp("2026-08-01"), pd.Timestamp("2026-05-01")],
+        )
 
     def history(self, period=None, interval=None, start=None, end=None, **kwargs):
         return pd.DataFrame(
@@ -197,6 +227,35 @@ async def test_price_history_as_of_truncates():
     assert history is not None
     assert len(history.bars) == 1
     assert history.bars[0].date == date(2024, 6, 10)
+
+
+async def test_news_parses_items():
+    news = await _source().get_news("AAPL")
+    assert news is not None
+    assert len(news.items) == 1
+    item = news.items[0]
+    assert item.title == "Apple unveils new chip"
+    assert item.publisher == "Reuters"
+    assert "news.example/aapl-chip" in item.url
+    assert item.published is not None and item.published.year == 2026
+
+
+async def test_earnings_splits_future_and_past():
+    info = await _source().get_earnings("AAPL", as_of=date(2026, 6, 25))
+    assert info.next_earnings_date == date(2026, 8, 1)
+    future = [e for e in info.events if e.is_future]
+    past = [e for e in info.events if not e.is_future]
+    assert any(e.event_date == date(2026, 8, 1) for e in future)
+    assert any(e.eps_reported == Decimal("1.46") for e in past)
+
+
+async def test_analyst_view_reports_consensus():
+    view = await _source().get_analyst_view("AAPL")
+    assert view is not None
+    assert view.recommendation_key == "buy"
+    assert view.number_of_analysts == 35
+    assert view.target_mean == Decimal("290.0")
+    assert view.target_high == Decimal("340.0")
 
 
 async def test_retry_recovers_from_transient_failure():
