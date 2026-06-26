@@ -8,6 +8,7 @@ from .batch import build_calendar, build_classification, build_news_digest
 from .comparison import build_comparison
 from .correlation import build_correlation
 from .dossier import build_dossier
+from .relative_strength import build_relative_strength
 
 __all__ = [
     "build_calendar",
@@ -16,4 +17,5 @@ __all__ = [
     "build_correlation",
     "build_dossier",
     "build_news_digest",
+    "build_relative_strength",
 ]

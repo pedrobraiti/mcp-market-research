@@ -37,6 +37,8 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 - `calendar(symbols[], as_of?)` — upcoming earnings & ex-dividend dates across symbols, sorted.
 - `company_snapshot(symbol, as_of?)` — price, day move, key multiples, sector/industry.
 - `fundamentals(symbol, period?, as_of?)` — income/balance/cash-flow figures + derived margins.
+- `quality_metrics(symbol, as_of?)` — ROE/ROA, margins, revenue & earnings growth and CAGR.
+- `relative_strength(symbols[], benchmark?, period?, as_of?)` — each name's return vs a benchmark.
 - `dividends(symbol, as_of?)` — payment history, trailing yield, growth streak, cut flag.
 - `news(symbol, limit?)` — recent headlines (title, publisher, date, link) — pairs with `extract`.
 - `earnings(symbol, as_of?)` — next earnings date + history (estimate / actual / surprise).

@@ -23,6 +23,7 @@ from .models import (
     NewsList,
     Period,
     PriceHistory,
+    QualityMetrics,
     SecFinancials,
     SymbolSearch,
 )
@@ -70,6 +71,12 @@ class MarketDataSource(Protocol):
 
     async def get_analyst_view(self, symbol: str) -> AnalystView | None:
         """Sell-side consensus rating and price targets (third-party opinion, as data)."""
+        ...
+
+    async def get_quality_metrics(
+        self, symbol: str, as_of: date | None = None
+    ) -> QualityMetrics | None:
+        """Derived ROE/ROA, margins and revenue/earnings growth & CAGR."""
         ...
 
     async def search_symbols(self, query: str, limit: int = 10) -> SymbolSearch:

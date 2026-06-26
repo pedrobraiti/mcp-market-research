@@ -258,6 +258,32 @@ async def test_analyst_view_reports_consensus():
     assert view.target_high == Decimal("340.0")
 
 
+async def test_quality_metrics_ratios_and_cagr():
+    # _INFO lacks the ratio keys, so add them via a custom ticker.
+    class QualityTicker(FakeTicker):
+        def __init__(self, symbol):
+            super().__init__(symbol)
+            self.info = {
+                **_INFO,
+                "returnOnEquity": 1.5,
+                "returnOnAssets": 0.3,
+                "grossMargins": 0.46,
+                "profitMargins": 0.24,
+                "revenueGrowth": 0.08,
+            }
+
+    source = YFinanceMarketData(ticker_factory=QualityTicker)
+    metrics = await source.get_quality_metrics("AAPL")
+    assert metrics is not None
+    assert metrics.roe == Decimal("1.5")
+    assert metrics.gross_margin == Decimal("0.46")
+    assert metrics.revenue_growth_yoy == Decimal("0.08")
+    # _INCOME has FY2024 revenue 391035 and FY2023 383285 → 1-period CAGR ~2.02%.
+    assert metrics.cagr_years == 1
+    assert metrics.revenue_cagr is not None
+    assert Decimal("0.01") < metrics.revenue_cagr < Decimal("0.03")
+
+
 async def test_search_symbols_parses_quotes():
     quotes = [
         {"symbol": "AAPL", "shortname": "Apple Inc.", "exchange": "NMS", "quoteType": "EQUITY"},

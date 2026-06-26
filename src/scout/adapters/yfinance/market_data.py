@@ -31,6 +31,7 @@ from ...domain.models import (
     Period,
     PriceBar,
     PriceHistory,
+    QualityMetrics,
     SymbolMatch,
     SymbolSearch,
 )
@@ -174,6 +175,13 @@ class YFinanceMarketData:
     async def search_symbols(self, query: str, limit: int = 10) -> SymbolSearch:
         return await asyncio.to_thread(
             self._retrying, self._search_sync, query.strip(), max(1, min(limit, 25))
+        )
+
+    async def get_quality_metrics(
+        self, symbol: str, as_of: date | None = None
+    ) -> QualityMetrics | None:
+        return await asyncio.to_thread(
+            self._retrying, self._quality_sync, symbol.strip().upper(), as_of
         )
 
     def _retrying(self, func: Callable[..., Any], *args: Any) -> Any:
@@ -420,6 +428,28 @@ class YFinanceMarketData:
             )
         return SymbolSearch(query=query, matches=matches)
 
+    def _quality_sync(self, symbol: str, as_of: date | None) -> QualityMetrics | None:
+        ticker = self._ticker_factory(symbol)
+        info = _info(ticker)
+        income = _statement(ticker, "income_stmt")
+        revenue_cagr, net_cagr, years = _statement_cagr(income, as_of)
+        if not info and revenue_cagr is None:
+            return None
+        return QualityMetrics(
+            symbol=symbol,
+            roe=_quantize(_dec(info.get("returnOnEquity")), 6),
+            roa=_quantize(_dec(info.get("returnOnAssets")), 6),
+            gross_margin=_quantize(_dec(info.get("grossMargins")), 6),
+            operating_margin=_quantize(_dec(info.get("operatingMargins")), 6),
+            net_margin=_quantize(_dec(info.get("profitMargins")), 6),
+            revenue_growth_yoy=_quantize(_dec(info.get("revenueGrowth")), 6),
+            earnings_growth_yoy=_quantize(_dec(info.get("earningsGrowth")), 6),
+            revenue_cagr=revenue_cagr,
+            net_income_cagr=net_cagr,
+            cagr_years=years,
+            as_of=as_of,
+        )
+
     def _analyst_sync(self, symbol: str) -> AnalystView | None:
         info = _info(self._ticker_factory(symbol))
         if not info:
@@ -546,6 +576,33 @@ def _row(statement: Any, column: Any, *labels: str) -> Decimal | None:
             except (KeyError, IndexError):
                 continue
     return None
+
+
+def _cagr(values: list[Decimal | None]) -> Decimal | None:
+    clean = [v for v in values if v is not None]
+    if len(clean) < 2:
+        return None
+    first, last = clean[0], clean[-1]
+    periods = len(clean) - 1
+    if first <= 0 or last <= 0:  # CAGR is undefined across non-positive endpoints
+        return None
+    result = (float(last) / float(first)) ** (1.0 / periods) - 1.0
+    return _quantize(Decimal(str(result)), 6)
+
+
+def _statement_cagr(
+    statement: Any, as_of: date | None
+) -> tuple[Decimal | None, Decimal | None, int | None]:
+    if statement is None or getattr(statement, "empty", True):
+        return None, None, None
+    limit = as_of or date.max
+    columns = [c for c in statement.columns if (_to_date(c) or date.max) <= limit]
+    columns.sort(key=lambda c: _to_date(c) or date.min)  # oldest → newest
+    if len(columns) < 2:
+        return None, None, (len(columns) or None)
+    revenue = [_row(statement, c, *_REVENUE) for c in columns]
+    net_income = [_row(statement, c, *_NET_INCOME) for c in columns]
+    return _cagr(revenue), _cagr(net_income), len(columns) - 1
 
 
 def _trailing_sum(payments: list[DividendPayment], reference: date) -> Decimal | None:

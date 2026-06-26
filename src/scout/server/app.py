@@ -22,6 +22,7 @@ from ..research import (
     build_correlation,
     build_dossier,
     build_news_digest,
+    build_relative_strength,
 )
 from .services import Services, build_services
 
@@ -186,6 +187,41 @@ async def company_snapshot(symbol: str, as_of: str | None = None) -> dict:
     try:
         snapshot = await svc.market_data.get_snapshot(symbol, _parse_as_of(as_of))
         return _ok(snapshot.model_dump(mode="json") if snapshot else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def quality_metrics(symbol: str, as_of: str | None = None) -> dict:
+    """Derived quality & return ratios for a US company.
+
+    Returns ROE, ROA, gross/operating/net margins, year-over-year revenue & earnings growth, and
+    multi-year revenue & net-income CAGR (computed from the income statements). Raw numbers — it
+    does not score "quality" or "moat"; you read ROE/margins/CAGR and judge.
+    """
+    svc = services()
+    try:
+        result = await svc.market_data.get_quality_metrics(symbol, _parse_as_of(as_of))
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def relative_strength(
+    symbols: list[str], benchmark: str = "SPY", period: str = "3mo", as_of: str | None = None
+) -> dict:
+    """Each symbol's total return over `period` vs a `benchmark` (default SPY).
+
+    Returns the period return per symbol and its excess over the benchmark, sorted strongest
+    first — the leadership/laggard read for momentum. Raw returns, not a "buy the strong" call.
+    """
+    svc = services()
+    try:
+        result = await build_relative_strength(
+            svc.market_data, symbols, benchmark.strip(), period.strip(), _parse_as_of(as_of)
+        )
+        return _ok(result.model_dump(mode="json"))
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 

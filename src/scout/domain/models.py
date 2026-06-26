@@ -353,6 +353,40 @@ class AnalystView(BaseModel):
     target_low: Decimal | None = None
 
 
+class QualityMetrics(BaseModel):
+    """Derived quality/return ratios — ROE/ROA, margins and growth/CAGR. Raw numbers, no rating."""
+
+    symbol: str
+    roe: Decimal | None = None
+    roa: Decimal | None = None
+    gross_margin: Decimal | None = None
+    operating_margin: Decimal | None = None
+    net_margin: Decimal | None = None
+    revenue_growth_yoy: Decimal | None = None
+    earnings_growth_yoy: Decimal | None = None
+    revenue_cagr: Decimal | None = None
+    net_income_cagr: Decimal | None = None
+    cagr_years: int | None = None
+    as_of: date | None = None
+
+
+class RelativeStrengthRow(BaseModel):
+    symbol: str
+    return_percent: Decimal | None = None
+    excess_vs_benchmark: Decimal | None = None
+    note: str | None = None
+
+
+class RelativeStrength(BaseModel):
+    """Each symbol's total return over a period vs a benchmark — momentum/leadership, as data."""
+
+    benchmark: str
+    period: str
+    benchmark_return_percent: Decimal | None = None
+    rows: list[RelativeStrengthRow] = []
+    notes: list[str] = []
+
+
 class ExtractedPage(BaseModel):
     """A web page fetched and reduced to clean, token-efficient markdown.
 

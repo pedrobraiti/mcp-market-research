@@ -18,6 +18,7 @@ from scout.research import (
     build_comparison,
     build_correlation,
     build_news_digest,
+    build_relative_strength,
 )
 
 
@@ -110,6 +111,23 @@ async def test_correlation_needs_two_symbols():
     result = await build_correlation(FakeSource(closes={"AAA": [1, 2, 3]}), ["AAA", "ZZZ"])
     assert result.matrix == {}
     assert any("at least two" in note.lower() for note in result.notes)
+
+
+async def test_relative_strength_vs_benchmark_sorted():
+    source = FakeSource(
+        closes={
+            "SPY": [100, 105],  # benchmark +5%
+            "AAA": [100, 120],  # +20% → excess +15
+            "BBB": [100, 102],  # +2%  → excess -3
+        }
+    )
+    result = await build_relative_strength(source, ["AAA", "BBB"], benchmark="SPY", period="3mo")
+    assert result.benchmark_return_percent == Decimal("5.00")
+    # Sorted strongest-excess first.
+    assert [r.symbol for r in result.rows] == ["AAA", "BBB"]
+    assert result.rows[0].return_percent == Decimal("20.00")
+    assert result.rows[0].excess_vs_benchmark == Decimal("15.00")
+    assert result.rows[1].excess_vs_benchmark == Decimal("-3.00")
 
 
 async def test_classification_in_batch():
