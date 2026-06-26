@@ -574,6 +574,29 @@ async def extract(url: str) -> dict:
 
 
 @mcp.tool()
+async def filing_search(query: str, forms: str | None = None, limit: int = 10) -> dict:
+    """Full-text search across ALL SEC EDGAR filings — discover companies by what they disclose.
+
+    The top-down "thesis → names" tool: search a phrase ("small modular reactor", "GLP-1") and get
+    the companies/filings that mention it, with name, ticker, form, date and a link. Optional
+    `forms` filter (e.g. "10-K"). Official data, not opinion. Requires SCOUT_SEC_USER_AGENT.
+    """
+    svc = services()
+    if svc.filings is None or not svc.settings.sec_user_agent.strip():
+        return _err(
+            ValueError(
+                "Set SCOUT_SEC_USER_AGENT (e.g. 'Your Name you@email.com') — SEC EDGAR "
+                "requires an identifiable User-Agent."
+            )
+        )
+    try:
+        result = await svc.filings.search_filings(query, forms, int(limit))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def sec_financials(symbol: str, as_of: str | None = None) -> dict:
     """Authoritative annual financials for a US company from **SEC EDGAR XBRL**.
 

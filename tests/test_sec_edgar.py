@@ -58,10 +58,30 @@ _CONCEPTS = {
 }
 
 
+_FTS = {
+    "hits": {
+        "total": {"value": 42},
+        "hits": [
+            {
+                "_id": "0000320193-24-000123:aapl-20240928.htm",
+                "_source": {
+                    "ciks": ["0000320193"],
+                    "display_names": ["Apple Inc. (AAPL) (CIK 0000320193)"],
+                    "form_type": "10-K",
+                    "file_date": "2024-11-01",
+                },
+            }
+        ],
+    }
+}
+
+
 def _fetch_factory():
     async def _fetch(url: str) -> dict:
         if "company_tickers" in url:
             return _TICKERS
+        if "efts.sec.gov" in url:
+            return _FTS
         if "/companyconcept/" in url:
             tag = url.rsplit("/", 1)[-1].removesuffix(".json")
             if tag in _CONCEPTS:
@@ -149,3 +169,22 @@ async def test_financials_as_of_picks_prior_year():
 
 async def test_financials_unresolved_symbol_returns_none():
     assert await _source().get_financials("NOPE") is None
+
+
+# ---- full-text search ----------------------------------------------------------------
+
+
+async def test_search_filings_parses_hits():
+    result = await _source().search_filings("small modular reactor", forms="10-K", limit=5)
+    assert result.query == "small modular reactor"
+    assert result.total == 42
+    assert len(result.hits) == 1
+    hit = result.hits[0]
+    assert hit.ticker == "AAPL"
+    assert "Apple Inc." in hit.company
+    assert hit.cik == "0000320193"
+    assert hit.form == "10-K"
+    assert hit.filing_date == date(2024, 11, 1)
+    assert hit.url == (
+        "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm"
+    )

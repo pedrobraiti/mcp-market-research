@@ -18,6 +18,7 @@ from .models import (
     EarningsInfo,
     EtfHoldings,
     ExtractedPage,
+    FilingSearch,
     FilingsList,
     Fundamentals,
     MacroSnapshot,
@@ -122,6 +123,12 @@ class FilingsSource(Protocol):
         as_of: date | None = None,
     ) -> FilingsList | None:
         """Recent filings, optionally restricted to ``form_type`` and dated at/before ``as_of``."""
+        ...
+
+    async def search_filings(
+        self, query: str, forms: str | None = None, limit: int = 10
+    ) -> FilingSearch:
+        """Full-text search across all EDGAR filings — find companies by what they disclose."""
         ...
 
 

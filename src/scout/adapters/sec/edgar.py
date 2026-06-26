@@ -10,12 +10,24 @@ only when the default httpx-based fetcher is used, so the unit tests run fully o
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from urllib.parse import quote
 
-from ...domain.models import Filing, FilingsList, SecFinancialLine, SecFinancials
+from ...domain.models import (
+    Filing,
+    FilingSearch,
+    FilingSearchHit,
+    FilingsList,
+    SecFinancialLine,
+    SecFinancials,
+)
+
+_FTS_URL = "https://efts.sec.gov/LATEST/search-index?q={query}"
+_TICKER_RE = re.compile(r"\(([A-Z][A-Z.\-]{0,6})[,)]")
 
 _TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 _SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
@@ -178,6 +190,41 @@ class SecEdgar:
         return FilingsList(
             symbol=symbol_upper, cik=cik, name=(data or {}).get("name"), filings=results
         )
+
+    async def search_filings(
+        self, query: str, forms: str | None = None, limit: int = 10
+    ) -> FilingSearch:
+        clean = query.strip()
+        url = _FTS_URL.format(query=quote(clean))
+        if forms:
+            url += "&forms=" + quote(forms.strip())
+        data = await self._fetch_json(url)
+        hits_block = (data or {}).get("hits") or {}
+        total = (hits_block.get("total") or {}).get("value")
+        hits: list[FilingSearchHit] = []
+        for hit in (hits_block.get("hits") or [])[: max(1, min(limit, 50))]:
+            source = hit.get("_source") or {}
+            ciks = source.get("ciks") or []
+            cik = ciks[0] if ciks else None
+            display = (source.get("display_names") or [None])[0]
+            ticker_match = _TICKER_RE.search(display) if display else None
+            accession, _, document = str(hit.get("_id", "")).partition(":")
+            url_doc = None
+            if cik and accession and document:
+                url_doc = _ARCHIVE_URL.format(
+                    cik_int=str(int(cik)), accession=accession.replace("-", ""), document=document
+                )
+            hits.append(
+                FilingSearchHit(
+                    company=display,
+                    ticker=ticker_match.group(1) if ticker_match else None,
+                    cik=cik,
+                    form=source.get("form_type") or source.get("file_type"),
+                    filing_date=_parse_date(source.get("file_date")),
+                    url=url_doc,
+                )
+            )
+        return FilingSearch(query=clean, total=total, hits=hits)
 
     async def get_financials(
         self, symbol: str, as_of: date | None = None

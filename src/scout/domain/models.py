@@ -543,6 +543,23 @@ class WebNewsSearch(BaseModel):
     items: list[WebNewsItem] = []
 
 
+class FilingSearchHit(BaseModel):
+    company: str | None = None
+    ticker: str | None = None
+    cik: str | None = None
+    form: str | None = None
+    filing_date: date | None = None
+    url: str | None = None
+
+
+class FilingSearch(BaseModel):
+    """Companies/filings matching a full-text query across all EDGAR filings (thesis → names)."""
+
+    query: str
+    total: int | None = None
+    hits: list[FilingSearchHit] = []
+
+
 class ExtractedPage(BaseModel):
     """A web page fetched and reduced to clean, token-efficient markdown.
 
