@@ -24,7 +24,7 @@ The scope (for now) is the universe Interactive Brokers can trade — primarily 
 
 ## Status
 
-🚧 **Early.** Architecture is locked (data MCP + strategy skill, Claude Code as the brain) and the first vertical slice is working: a yfinance adapter behind a port, exposed as three MCP tools, with offline tests and live-validated. More tools are next — see `docs/tool-brainstorm.md` for the planned surface and design principles.
+🚧 **Early.** Architecture is locked (data MCP + strategy skill, Claude Code as the brain) and the first tools are working: yfinance + SEC EDGAR adapters behind ports, exposed as MCP tools, with offline tests and live-validated. More tools are next — see [DECISIONS.md](DECISIONS.md) for the design principles.
 
 ## Tools (today)
 

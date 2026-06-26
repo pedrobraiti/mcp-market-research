@@ -1,5 +1,6 @@
 # Python
 .venv/
+venv/
 __pycache__/
 *.pyc
 *.pyo
@@ -10,16 +11,24 @@ dist/
 .ruff_cache/
 .mypy_cache/
 
-# Secrets / env
+# Secrets / environment
 .env
+*.local
 
-# Logs / data caches
+# Data / logs
 logs/
 *.log
 
-# OS
+# OS / editor
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
 
-# Memória do projeto: marcador do hook (o resto de .claude/ É versionado)
-.claude/.last-stop-signature
+# Agent working memory: internal journals and design notes ("where I left off",
+# brainstorms, the skill spec). Kept local — out of the public repo.
+# CLAUDE.md (at the root) stays versioned; the public rationale lives in DECISIONS.md.
+.claude/
+
+# Internal research benchmark: evaluation artifacts + personal research outputs. Local only.
+benchmark/
