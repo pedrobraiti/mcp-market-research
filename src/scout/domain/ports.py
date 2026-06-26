@@ -31,7 +31,9 @@ from .models import (
     RetailBuzz,
     SecFinancials,
     SymbolSearch,
+    TreasuryData,
     WebNewsSearch,
+    WorldBankData,
 )
 
 
@@ -138,6 +140,26 @@ class MacroSource(Protocol):
 
     async def get_macro_context(self, as_of: date | None = None) -> MacroSnapshot:
         """Latest value of each key macro series, at or before ``as_of``."""
+        ...
+
+
+@runtime_checkable
+class WorldMacroSource(Protocol):
+    """Country-level macro indicators (World Bank today)."""
+
+    async def get_indicators(
+        self, country: str = "USA", codes: list[str] | None = None
+    ) -> WorldBankData:
+        """Latest value of key macro indicators for a country."""
+        ...
+
+
+@runtime_checkable
+class TreasurySource(Protocol):
+    """Official US Treasury fiscal data (Fiscal Data API today)."""
+
+    async def get_data(self) -> TreasuryData:
+        """Latest headline fiscal figures (public debt, average interest rates)."""
         ...
 
 

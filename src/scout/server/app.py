@@ -483,6 +483,41 @@ async def etf_holdings(symbol: str) -> dict:
 
 
 @mcp.tool()
+async def world_macro(country: str = "USA", codes: list[str] | None = None) -> dict:
+    """Country-level macro indicators from the **World Bank** (global, official, keyless).
+
+    Returns the latest GDP growth, inflation, unemployment, GDP per capita and population for a
+    `country` (ISO code, default "USA"). Lower-frequency structural context — for US trading-day
+    macro use `macro_context` (FRED); this broadens the picture to any country.
+    """
+    svc = services()
+    if svc.world_macro is None:
+        return _err(ValueError("World macro source is not configured."))
+    try:
+        result = await svc.world_macro.get_indicators(country, codes)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def treasury_data() -> dict:
+    """Official US Treasury fiscal data (keyless): total public debt and average interest rates.
+
+    Returns the latest total public debt outstanding and the average interest rate the Treasury
+    pays by security type — authoritative figures straight from the US Treasury Fiscal Data API.
+    """
+    svc = services()
+    if svc.treasury is None:
+        return _err(ValueError("Treasury source is not configured."))
+    try:
+        result = await svc.treasury.get_data()
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def macro_context(as_of: str | None = None) -> dict:
     """Key US macro indicators (from FRED): policy rate, the yield curve, jobs, inflation, vol.
 

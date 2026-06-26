@@ -481,6 +481,34 @@ class OptionsVolatility(BaseModel):
     note: str | None = None
 
 
+class WorldBankIndicator(BaseModel):
+    code: str
+    name: str | None = None
+    value: Decimal | None = None
+    year: int | None = None
+    country: str | None = None
+
+
+class WorldBankData(BaseModel):
+    """Key macro indicators for a country from the World Bank (global, official, keyless)."""
+
+    country: str
+    indicators: list[WorldBankIndicator] = []
+
+
+class TreasuryFigure(BaseModel):
+    name: str
+    value: Decimal | None = None
+    unit: str | None = None
+    record_date: date | None = None
+
+
+class TreasuryData(BaseModel):
+    """Official US Treasury fiscal data (debt, average interest rates) — keyless, authoritative."""
+
+    figures: list[TreasuryFigure] = []
+
+
 class RetailBuzzItem(BaseModel):
     symbol: str
     name: str | None = None

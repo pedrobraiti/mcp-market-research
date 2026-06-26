@@ -14,7 +14,9 @@ from ..adapters.gdelt import GdeltNewsSearch
 from ..adapters.price_fallback import PriceFallbackMarketData
 from ..adapters.sec import SecEdgar
 from ..adapters.stooq import StooqPrices
+from ..adapters.treasury import TreasuryFiscal
 from ..adapters.web import WebExtractor
+from ..adapters.worldbank import WorldBankMacro
 from ..adapters.yfinance import YFinanceMarketData
 from ..config import Settings, get_settings
 from ..domain.ports import (
@@ -25,6 +27,8 @@ from ..domain.ports import (
     MarketDataSource,
     NewsSearchSource,
     RetailBuzzSource,
+    TreasurySource,
+    WorldMacroSource,
 )
 
 
@@ -38,6 +42,8 @@ class Services:
     macro: MacroSource | None = None
     news_search: NewsSearchSource | None = None
     retail_buzz: RetailBuzzSource | None = None
+    world_macro: WorldMacroSource | None = None
+    treasury: TreasurySource | None = None
 
 
 def build_services(settings: Settings | None = None) -> Services:
@@ -54,4 +60,6 @@ def build_services(settings: Settings | None = None) -> Services:
         macro=FredMacro(timeout=timeout),
         news_search=GdeltNewsSearch(timeout=timeout),
         retail_buzz=ApeWisdomBuzz(timeout=timeout),
+        world_macro=WorldBankMacro(timeout=timeout),
+        treasury=TreasuryFiscal(timeout=timeout),
     )
