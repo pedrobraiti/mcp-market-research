@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..adapters.alternative import AlternativeFearGreed
 from ..adapters.apewisdom import ApeWisdomBuzz
+from ..adapters.ccxt import CcxtMarketData
+from ..adapters.coinpaprika import CoinpaprikaAssets
 from ..adapters.fred import FredMacro
 from ..adapters.gdelt import GdeltNewsSearch
 from ..adapters.price_fallback import PriceFallbackMarketData
@@ -23,6 +26,9 @@ from ..config import Settings, get_settings
 from ..domain.ports import (
     AttentionSource,
     ContentExtractor,
+    CryptoAssetSource,
+    CryptoMarketDataSource,
+    CryptoSentimentSource,
     FilingsSource,
     FinancialsSource,
     MacroSource,
@@ -47,6 +53,10 @@ class Services:
     world_macro: WorldMacroSource | None = None
     treasury: TreasurySource | None = None
     attention: AttentionSource | None = None
+    crypto_market_data: CryptoMarketDataSource | None = None
+    crypto_assets: CryptoAssetSource | None = None
+    crypto_sentiment: CryptoSentimentSource | None = None
+    crypto_buzz: RetailBuzzSource | None = None
 
 
 def build_services(settings: Settings | None = None) -> Services:
@@ -66,4 +76,14 @@ def build_services(settings: Settings | None = None) -> Services:
         world_macro=WorldBankMacro(timeout=timeout),
         treasury=TreasuryFiscal(timeout=timeout),
         attention=WikimediaPageviews(timeout=timeout),
+        crypto_market_data=CcxtMarketData(
+            exchange=settings.crypto_exchange,
+            quote_ccy=settings.crypto_quote_ccy,
+            timeout=timeout,
+        ),
+        crypto_assets=CoinpaprikaAssets(timeout=timeout),
+        crypto_sentiment=AlternativeFearGreed(timeout=timeout),
+        crypto_buzz=ApeWisdomBuzz(
+            timeout=timeout, filter_name="all-crypto", strip_suffix=True
+        ),
     )

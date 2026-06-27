@@ -14,6 +14,10 @@ from typing import Protocol, runtime_checkable
 from .models import (
     AnalystView,
     CompanySnapshot,
+    CryptoAssetProfile,
+    CryptoFearGreed,
+    CryptoPriceHistory,
+    CryptoQuote,
     DividendHistory,
     EarningsInfo,
     EtfHoldings,
@@ -207,4 +211,41 @@ class ContentExtractor(Protocol):
     async def extract(self, url: str) -> ExtractedPage:
         """Fetch ``url`` and extract the main content. Always returns a result (with
         ``fetched_ok=False`` and a note on a block/error), never raises for the agent."""
+        ...
+
+
+@runtime_checkable
+class CryptoMarketDataSource(Protocol):
+    """Reads of public crypto spot market data (CCXT public endpoints today)."""
+
+    async def get_quote(self, symbol: str) -> CryptoQuote | None:
+        """Live spot quote (last/bid/ask, 24h move) for a pair. ``None`` if it can't be resolved."""
+        ...
+
+    async def get_price_history(
+        self,
+        symbol: str,
+        timeframe: str = "1d",
+        limit: int = 200,
+        as_of: date | None = None,
+    ) -> CryptoPriceHistory | None:
+        """OHLCV candles for a pair, most recent ``limit`` bars truncated at/before ``as_of``."""
+        ...
+
+
+@runtime_checkable
+class CryptoAssetSource(Protocol):
+    """Reads of asset-level crypto data: supply, market cap, rank (Coinpaprika today)."""
+
+    async def get_profile(self, base: str) -> CryptoAssetProfile | None:
+        """Supply/market-cap/rank/ATH for a base asset (e.g. ``BTC``). ``None`` if not found."""
+        ...
+
+
+@runtime_checkable
+class CryptoSentimentSource(Protocol):
+    """Market-wide crypto sentiment (alternative.me Fear & Greed today)."""
+
+    async def get_fear_greed(self, days: int = 30) -> CryptoFearGreed:
+        """Current Fear & Greed index plus the daily history over the last ``days``."""
         ...

@@ -590,3 +590,90 @@ class ExtractedPage(BaseModel):
     markdown: str | None = None
     char_count: int | None = None
     note: str | None = None
+
+
+# --- Crypto models (spot, BASE/QUOTE) -----------------------------------------------------
+# Mirror the equities models but for crypto spot pairs. Symbols use the CCXT unified format
+# ``BASE/QUOTE`` (e.g. ``BTC/USDT``) so a researched asset maps straight to a tradable pair on
+# the execution side. Data only — never a verdict (same constitution as the rest of Scout).
+
+
+class CryptoQuote(BaseModel):
+    """A live spot quote for a crypto pair — last/bid/ask and the 24h move."""
+
+    symbol: str  # CCXT unified pair, e.g. "BTC/USDT"
+    base: str  # e.g. "BTC"
+    quote: str  # e.g. "USDT"
+    exchange: str
+    last: Decimal | None = None
+    bid: Decimal | None = None
+    ask: Decimal | None = None
+    high_24h: Decimal | None = None
+    low_24h: Decimal | None = None
+    change_percent_24h: Decimal | None = None
+    base_volume_24h: Decimal | None = None
+    quote_volume_24h: Decimal | None = None
+    timestamp: datetime | None = None
+
+
+class CryptoBar(BaseModel):
+    """One OHLCV candle. ``timestamp`` keeps intraday resolution (the date-keyed PriceBar can't)."""
+
+    timestamp: datetime
+    open: Decimal | None = None
+    high: Decimal | None = None
+    low: Decimal | None = None
+    close: Decimal | None = None
+    volume: Decimal | None = None  # base-asset volume (fractional in crypto)
+
+
+class CryptoPriceHistory(BaseModel):
+    """OHLCV candles for a crypto pair over a timeframe."""
+
+    symbol: str  # CCXT unified pair, e.g. "BTC/USDT"
+    base: str
+    quote: str
+    exchange: str
+    timeframe: str  # CCXT timeframe, e.g. "1d", "1h", "5m"
+    bars: list[CryptoBar] = []
+    as_of: date | None = None
+
+
+class CryptoAssetProfile(BaseModel):
+    """Supply, market cap, rank and ATH for a crypto asset (the 'fundamentals' of crypto).
+
+    Sourced from an aggregator (Coinpaprika) keyed by the asset, not a single exchange — raw
+    facts (circulating/total/max supply, market cap, rank), not a verdict on value.
+    """
+
+    base: str  # e.g. "BTC"
+    name: str | None = None
+    source_id: str | None = None  # the aggregator's id, e.g. "btc-bitcoin"
+    rank: int | None = None
+    price_usd: Decimal | None = None
+    market_cap_usd: Decimal | None = None
+    volume_24h_usd: Decimal | None = None
+    circulating_supply: Decimal | None = None
+    total_supply: Decimal | None = None
+    max_supply: Decimal | None = None
+    ath_price_usd: Decimal | None = None
+    ath_date: date | None = None
+    percent_from_ath: Decimal | None = None
+
+
+class FearGreedPoint(BaseModel):
+    value: int | None = None
+    classification: str | None = None
+    observation_date: date | None = None
+
+
+class CryptoFearGreed(BaseModel):
+    """The Crypto Fear & Greed Index (alternative.me) — a market-wide sentiment gauge 0-100.
+
+    Market-level, not per-coin. Raw index + history; the agent reads the level, no buy/sell call.
+    """
+
+    value: int | None = None
+    classification: str | None = None
+    observation_date: date | None = None
+    history: list[FearGreedPoint] = []

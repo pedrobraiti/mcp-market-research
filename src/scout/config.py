@@ -37,6 +37,11 @@ class Settings(BaseSettings):
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
 
+    # Crypto market data (CCXT public endpoints — no exchange key, read-only). The exchange is
+    # used only for public price/OHLCV; quote_ccy is the default quote for bare symbols ("BTC").
+    crypto_exchange: str = "binance"
+    crypto_quote_ccy: str = "USDT"
+
 
 @lru_cache
 def get_settings() -> Settings:

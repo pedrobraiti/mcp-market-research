@@ -1,8 +1,12 @@
 """ApeWisdom implementation of ``RetailBuzzSource`` — keyless Reddit mention buzz.
 
-ApeWisdom aggregates Reddit (WallStreetBets / r/stocks) ticker mentions. It's a retail-ATTENTION
-signal (how much a name is being talked about, and the change vs 24h ago) — NOT a sentiment score
-and skewed toward meme names. Reported as raw counts; the agent decides what the buzz means.
+ApeWisdom aggregates Reddit ticker mentions. It's a retail-ATTENTION signal (how much a name is
+being talked about, and the change vs 24h ago) — NOT a sentiment score and skewed toward meme
+names. Reported as raw counts; the agent decides what the buzz means.
+
+The same adapter serves stocks and crypto via the ``filter_name`` (ApeWisdom's filter slug):
+``all-stocks`` for equities and ``all-crypto`` for crypto. Crypto tickers come suffixed ``.X``
+(e.g. ``BTC.X``); ``strip_suffix`` drops it so the symbol matches the tradable base ("BTC").
 
 The JSON fetch is injected for offline tests.
 """
@@ -14,7 +18,7 @@ from typing import Any
 
 from ...domain.models import RetailBuzz, RetailBuzzItem
 
-_URL = "https://apewisdom.io/api/v1.0/filter/all-stocks/page/1"
+_URL = "https://apewisdom.io/api/v1.0/filter/{filter_name}/page/1"
 
 
 def _int(value: Any) -> int | None:
@@ -24,9 +28,16 @@ def _int(value: Any) -> int | None:
         return None
 
 
-def _row(entry: dict) -> RetailBuzzItem:
+def _symbol(raw: Any, strip_suffix: bool) -> str:
+    text = str(raw or "").upper()
+    if strip_suffix and "." in text:
+        text = text.split(".", 1)[0]
+    return text
+
+
+def _row(entry: dict, strip_suffix: bool) -> RetailBuzzItem:
     return RetailBuzzItem(
-        symbol=str(entry.get("ticker", "")).upper(),
+        symbol=_symbol(entry.get("ticker"), strip_suffix),
         name=entry.get("name"),
         rank=_int(entry.get("rank")),
         rank_24h_ago=_int(entry.get("rank_24h_ago")),
@@ -41,9 +52,13 @@ class ApeWisdomBuzz:
         self,
         fetch_json: Callable[[str], Awaitable[dict]] | None = None,
         timeout: float = 15.0,
+        filter_name: str = "all-stocks",
+        strip_suffix: bool = False,
     ) -> None:
         self._timeout = timeout
         self._fetch_json = fetch_json or self._default_fetch_json
+        self._filter_name = filter_name
+        self._strip_suffix = strip_suffix
 
     async def _default_fetch_json(self, url: str) -> dict:
         import httpx
@@ -54,12 +69,16 @@ class ApeWisdomBuzz:
             return response.json()
 
     async def get_buzz(self, symbol: str | None = None, limit: int = 20) -> RetailBuzz:
-        data = await self._fetch_json(_URL)
+        data = await self._fetch_json(_URL.format(filter_name=self._filter_name))
         results = (data or {}).get("results") or []
-        rows = [_row(entry) for entry in results if isinstance(entry, dict) and entry.get("ticker")]
+        rows = [
+            _row(entry, self._strip_suffix)
+            for entry in results
+            if isinstance(entry, dict) and entry.get("ticker")
+        ]
 
         if symbol:
-            wanted = symbol.strip().upper()
+            wanted = _symbol(symbol.strip(), self._strip_suffix)
             match = [r for r in rows if r.symbol == wanted]
             if match:
                 return RetailBuzz(symbol=wanted, items=match)

@@ -36,3 +36,38 @@ async def test_buzz_symbol_not_trending():
     result = await _source().get_buzz("AAPL")
     assert result.items == []
     assert "not in the current Reddit trending list" in result.note
+
+
+_CRYPTO_RESPONSE = {
+    "results": [
+        {"rank": 1, "ticker": "BTC.X", "name": "Bitcoin", "mentions": 210,
+         "mentions_24h_ago": 180, "upvotes": 5000, "rank_24h_ago": 1},
+        {"rank": 2, "ticker": "ETH.X", "name": "Ethereum", "mentions": 150,
+         "mentions_24h_ago": 160, "upvotes": 3000, "rank_24h_ago": 2},
+    ]
+}
+
+
+def _crypto_source():
+    captured = {}
+
+    async def _fetch(url: str) -> dict:
+        captured["url"] = url
+        return _CRYPTO_RESPONSE
+
+    return ApeWisdomBuzz(fetch_json=_fetch, filter_name="all-crypto", strip_suffix=True), captured
+
+
+async def test_crypto_filter_strips_suffix_and_uses_crypto_url():
+    source, captured = _crypto_source()
+    result = await source.get_buzz(limit=5)
+    assert "all-crypto" in captured["url"]
+    assert [i.symbol for i in result.items] == ["BTC", "ETH"]  # ".X" suffix stripped
+
+
+async def test_crypto_buzz_symbol_lookup_matches_stripped_base():
+    source, _ = _crypto_source()
+    result = await source.get_buzz("btc")
+    assert result.symbol == "BTC"
+    assert len(result.items) == 1
+    assert result.items[0].mentions == 210

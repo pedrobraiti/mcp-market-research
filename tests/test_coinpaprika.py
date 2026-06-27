@@ -1,0 +1,77 @@
+from datetime import date
+from decimal import Decimal
+
+from scout.adapters.coinpaprika import CoinpaprikaAssets
+
+_SEARCH = {
+    "currencies": [
+        {"id": "btc-bitcoin", "name": "Bitcoin", "symbol": "BTC", "rank": 1},
+    ]
+}
+
+_TICKER = {
+    "id": "btc-bitcoin",
+    "name": "Bitcoin",
+    "symbol": "BTC",
+    "rank": 1,
+    "circulating_supply": 19700000,
+    "total_supply": 19700000,
+    "max_supply": 21000000,
+    "quotes": {
+        "USD": {
+            "price": 67000.0,
+            "market_cap": 1320000000000,
+            "volume_24h": 30000000000,
+            "ath_price": 73000.0,
+            "ath_date": "2024-03-14T00:00:00Z",
+            "percent_from_price_ath": -8.2,
+        }
+    },
+}
+
+
+def _source(search=_SEARCH, ticker=_TICKER):
+    async def _fetch(url: str):
+        if "search" in url:
+            return search
+        return ticker
+
+    return CoinpaprikaAssets(fetch_json=_fetch)
+
+
+async def test_get_profile_builds_model():
+    profile = await _source().get_profile("BTC")
+    assert profile is not None
+    assert profile.base == "BTC"
+    assert profile.source_id == "btc-bitcoin"
+    assert profile.rank == 1
+    assert profile.market_cap_usd == Decimal("1320000000000")
+    assert profile.max_supply == Decimal("21000000")
+    assert profile.ath_date == date(2024, 3, 14)
+    assert profile.percent_from_ath == Decimal("-8.2")
+
+
+async def test_get_profile_prefers_exact_symbol_match():
+    search = {
+        "currencies": [
+            {"id": "btc-some-clone", "name": "Bitcoin Clone", "symbol": "BTCC", "rank": 50},
+            {"id": "btc-bitcoin", "name": "Bitcoin", "symbol": "BTC", "rank": 1},
+        ]
+    }
+
+    captured = {}
+
+    async def _fetch(url: str):
+        if "search" in url:
+            return search
+        captured["ticker_url"] = url
+        return _TICKER
+
+    profile = await CoinpaprikaAssets(fetch_json=_fetch).get_profile("BTC")
+    assert "btc-bitcoin" in captured["ticker_url"]  # exact symbol, lowest rank
+    assert profile.base == "BTC"
+
+
+async def test_get_profile_none_when_no_match():
+    profile = await _source(search={"currencies": []}).get_profile("NOTACOIN")
+    assert profile is None

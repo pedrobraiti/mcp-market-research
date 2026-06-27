@@ -4,15 +4,15 @@
 
 <p align="center">
   <em>Valet trades, Scout researches.</em> The <strong>senses</strong> layer of an agentic-trading
-  stack — it gives an AI agent (like Claude Code) the data to research any US stock or ETF, in depth,
-  from <strong>free</strong> sources. Pairs with
+  stack — it gives an AI agent (like Claude Code) the data to research any US stock, ETF or crypto
+  asset, in depth, from <strong>free</strong> sources. Pairs with
   <a href="https://github.com/pedrobraiti/agentic-trading-mcp">agentic-trading-mcp</a> (execution).
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT">
-  <img src="https://img.shields.io/badge/tools-32-orange" alt="32 tools">
+  <img src="https://img.shields.io/badge/tools-38-orange" alt="38 tools">
   <img src="https://img.shields.io/badge/status-live--validated-success" alt="Status: live-validated">
 </p>
 
@@ -21,9 +21,10 @@
 
 ## What this is
 
-**Scout** is an **MCP server** exposing **32 purpose-built tools** an AI agent calls to research a
+**Scout** is an **MCP server** exposing **38 purpose-built tools** an AI agent calls to research a
 company or market — quotes, fundamentals, technicals, options-implied volatility, SEC filings & XBRL
-financials, macro, news, sentiment and attention — gathered from **free, keyless** data sources, in
+financials, macro, news, sentiment and attention, plus **crypto spot** (quotes, OHLCV, supply/market
+cap, the Fear & Greed index and Reddit buzz) — gathered from **free, keyless** data sources, in
 parallel, returned as typed, structured data.
 
 It is the **senses** layer of a three-part split:
@@ -32,8 +33,8 @@ It is the **senses** layer of a three-part split:
 - **Senses** — **Scout** (this repo): data & info gathering. **Stateless, data-only.**
 - **Hands** — [`agentic-trading-mcp`](https://github.com/pedrobraiti/agentic-trading-mcp): execution on Interactive Brokers (stocks/ETFs) and crypto exchanges (spot, via CCXT).
 
-Scope: primarily **US equities & ETFs** (what the broker can trade). Every tool returns an
-`{"ok": ..., "data": ...}` envelope and most accept an optional `as_of` (point-in-time) date.
+Scope: **US equities & ETFs** plus **crypto spot** (what the execution side can trade). Every tool
+returns an `{"ok": ..., "data": ...}` envelope and most accept an optional `as_of` (point-in-time) date.
 
 > **Scout returns data, not reports.** It gives the agent the numbers and sources; the agent does the
 > analysis and produces the output (e.g. a written report, a chart, a PDF). Ask your agent to
@@ -77,7 +78,7 @@ across the tools below, then composes the result itself.
 an identifiable User-Agent) — without it the SEC tools (`filings`, `sec_financials`, `filing_search`)
 return a clear "please set it" message; everything else works keyless.
 
-## Tools (32)
+## Tools (38)
 
 **Discovery — find names, not just look them up**
 - `search_symbols(query, limit?)` — company name / partial ticker → symbols (the entry point).
@@ -122,6 +123,14 @@ return a clear "please set it" message; everything else works keyless.
 - `news_digest(symbols[], limit_per_symbol?)` — headlines across a watchlist, newest first.
 - `calendar(symbols[], as_of?)` — upcoming earnings & ex-dividend dates across symbols, sorted.
 
+**Crypto (spot)** — symbols use the CCXT `BASE/QUOTE` format (e.g. `BTC/USDT`, or just `BTC`)
+- `crypto_quote(symbol)` — live spot quote: last/bid/ask + 24h move (the crypto `company_snapshot`).
+- `crypto_price_history(symbol, timeframe?, limit?, as_of?)` — OHLCV candles (CCXT, ~100 exchanges).
+- `crypto_technicals(symbol, as_of?)` — SMA/EMA/RSI/MACD/ATR for a pair (same math as `technicals`).
+- `crypto_asset_profile(symbol)` — supply (circ/total/max), market cap, rank, ATH (**Coinpaprika**).
+- `crypto_fear_greed(days?)` — the Crypto Fear & Greed Index (0-100) + history (**alternative.me**).
+- `crypto_buzz(symbol?, limit?)` — Reddit crypto mention buzz (**ApeWisdom** `all-crypto`).
+
 **Web**
 - `extract(url)` — fetch a page → clean, token-efficient markdown (honestly reports paywalls/blocks).
 
@@ -134,9 +143,10 @@ without touching the domain. Design principles (stateless, data-not-verdict, poi
 
 ```
 domain/      models + ports (the contracts)
-adapters/    yfinance, SEC EDGAR, FRED, World Bank, US Treasury, GDELT, ApeWisdom, Wikimedia, web, stooq
+adapters/    yfinance, SEC EDGAR, FRED, World Bank, US Treasury, GDELT, ApeWisdom, Wikimedia, web, stooq,
+             CCXT, Coinpaprika, alternative.me (crypto)
 research/    meta-tools that fan several ports out in parallel (dossier, compare, correlation, sectors…)
-analytics.py source-agnostic indicator math (SMA/EMA/RSI/MACD/ATR, correlation)
+analytics.py source-agnostic indicator math (SMA/EMA/RSI/MACD/ATR, correlation) — reused for crypto
 server/      MCP server (FastMCP) + dependency composition
 ```
 
@@ -150,9 +160,12 @@ server/      MCP server (FastMCP) + dependency composition
 | **World Bank** | global country-level macro | none |
 | **US Treasury** | public debt, average interest rates | none |
 | **GDELT** | global news/event search | none |
-| **ApeWisdom** | Reddit mention buzz | none |
+| **ApeWisdom** | Reddit mention buzz (stocks + crypto) | none |
 | **Wikimedia** | Wikipedia pageviews (attention) | none |
 | **stooq** | daily prices — transparent fallback for yfinance | none |
+| **CCXT** | crypto spot quotes & OHLCV (public, ~100 exchanges) | none (public market data) |
+| **Coinpaprika** | crypto supply, market cap, rank, ATH | none |
+| **alternative.me** | Crypto Fear & Greed Index | none |
 
 Paid free-tiers (Finnhub/FMP) are pluggable behind the same ports if ever wanted.
 
@@ -160,7 +173,7 @@ Paid free-tiers (Finnhub/FMP) are pluggable behind the same ports if ever wanted
 
 ```bash
 pip install -e ".[dev]"
-pytest -q          # 96 offline tests
+pytest -q          # 114 offline tests
 ruff check .       # lint
 ```
 

@@ -14,7 +14,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from ..analytics import compute_technicals
-from ..domain.models import Period
+from ..domain.models import CryptoPriceHistory, Period, PriceBar, PriceHistory
 from ..research import (
     build_calendar,
     build_classification,
@@ -641,6 +641,152 @@ async def sec_financials(symbol: str, as_of: str | None = None) -> dict:
     try:
         result = await svc.financials.get_financials(symbol, _parse_as_of(as_of))
         return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+def _crypto_to_price_history(history: CryptoPriceHistory) -> PriceHistory:
+    """Adapt crypto OHLCV onto the equities ``PriceHistory`` so ``compute_technicals`` is reused."""
+    bars = [
+        PriceBar(
+            date=bar.timestamp.date(),
+            open=bar.open,
+            high=bar.high,
+            low=bar.low,
+            close=bar.close,
+        )
+        for bar in history.bars
+    ]
+    return PriceHistory(
+        symbol=history.symbol, interval=history.timeframe, bars=bars, as_of=history.as_of
+    )
+
+
+@mcp.tool()
+async def crypto_quote(symbol: str) -> dict:
+    """Live spot quote for a crypto pair: last/bid/ask and the 24h move.
+
+    `symbol` is a CCXT pair like "BTC/USDT" (or just "BTC" — the default quote, USDT, is added).
+    Returns last/bid/ask, 24h high/low, 24h % change and base/quote volume from the configured
+    exchange (default Binance). The crypto analog of `company_snapshot`. `data` is null if the
+    pair can't be resolved. Raw market data, not a trade call.
+    """
+    svc = services()
+    if svc.crypto_market_data is None:
+        return _err(ValueError("Crypto market data is not configured."))
+    try:
+        result = await svc.crypto_market_data.get_quote(symbol)
+        return _ok(result.model_dump(mode="json") if result else None)
+    except ValueError as exc:
+        return _err(exc)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_price_history(
+    symbol: str, timeframe: str = "1d", limit: int = 200, as_of: str | None = None
+) -> dict:
+    """OHLCV candle history for a crypto pair.
+
+    `symbol` is a CCXT pair ("BTC/USDT" or "BTC"); `timeframe` is a CCXT bar size
+    ("1m","5m","15m","1h","4h","1d","1w"); `limit` is how many recent candles (max 1000). Pass
+    `as_of` (YYYY-MM-DD) to drop candles after that date. Each bar carries a UTC `timestamp` and
+    open/high/low/close/volume. The crypto analog of `price_history`.
+    """
+    svc = services()
+    if svc.crypto_market_data is None:
+        return _err(ValueError("Crypto market data is not configured."))
+    try:
+        result = await svc.crypto_market_data.get_price_history(
+            symbol, timeframe.strip(), int(limit), _parse_as_of(as_of)
+        )
+        return _ok(result.model_dump(mode="json") if result else None)
+    except ValueError as exc:
+        return _err(exc)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_technicals(symbol: str, as_of: str | None = None) -> dict:
+    """Technical indicators for a crypto pair, computed from ~300 daily candles.
+
+    Returns last price, SMA(50/200), EMA(20), RSI(14), MACD, ATR(14) and the 52-week high/low —
+    the same indicator set as the equities `technicals` tool, reusing the same pure math. `symbol`
+    is a CCXT pair ("BTC/USDT" or "BTC"); pass `as_of` (YYYY-MM-DD) for a point-in-time read.
+    **Raw numbers, not a verdict** (no "overbought"/"uptrend"). `data` is null if there isn't
+    enough history.
+    """
+    svc = services()
+    if svc.crypto_market_data is None:
+        return _err(ValueError("Crypto market data is not configured."))
+    try:
+        history = await svc.crypto_market_data.get_price_history(
+            symbol, "1d", 300, _parse_as_of(as_of)
+        )
+        if history is None or not history.bars:
+            return _ok(None)
+        return _ok(compute_technicals(_crypto_to_price_history(history)).model_dump(mode="json"))
+    except ValueError as exc:
+        return _err(exc)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_asset_profile(symbol: str) -> dict:
+    """Supply, market cap, rank and ATH for a crypto asset — the 'fundamentals' of crypto.
+
+    `symbol` is the base asset ("BTC", or a pair like "BTC/USDT" — only the base is used).
+    Returns circulating/total/max supply, USD market cap & rank, 24h volume, and all-time-high
+    price/date with % from ATH (from Coinpaprika, keyed by the asset, not one exchange). Raw
+    facts, not a valuation. `data` is null if the asset can't be resolved.
+    """
+    svc = services()
+    if svc.crypto_assets is None:
+        return _err(ValueError("Crypto asset source is not configured."))
+    base = symbol.strip().replace("-", "/").replace("_", "/").split("/")[0]
+    try:
+        result = await svc.crypto_assets.get_profile(base)
+        return _ok(result.model_dump(mode="json") if result else None)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_fear_greed(days: int = 30) -> dict:
+    """The Crypto Fear & Greed Index (0-100) — market-wide sentiment, with daily history.
+
+    Returns the current value and classification (Extreme Fear … Extreme Greed) plus the daily
+    history over the last `days` (alternative.me, keyless). Market-level, NOT per-coin — a mood
+    gauge the agent reads alongside price. Raw index, not a buy/sell signal.
+    """
+    svc = services()
+    if svc.crypto_sentiment is None:
+        return _err(ValueError("Crypto sentiment source is not configured."))
+    try:
+        result = await svc.crypto_sentiment.get_fear_greed(int(days))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_buzz(symbol: str | None = None, limit: int = 20) -> dict:
+    """Reddit crypto mention buzz — a retail-attention signal for coins.
+
+    Without `symbol`, returns the top trending coins by Reddit mentions (rank, mentions, change
+    vs 24h ago). With `symbol` (e.g. "BTC"), returns that coin's buzz (or a note if it isn't
+    trending). The crypto analog of `retail_buzz` (ApeWisdom's `all-crypto` filter). This is
+    **attention/buzz, not sentiment**, and skews toward meme coins — raw counts to interpret.
+    """
+    svc = services()
+    if svc.crypto_buzz is None:
+        return _err(ValueError("Crypto buzz is not configured."))
+    try:
+        result = await svc.crypto_buzz.get_buzz(symbol, int(limit))
+        return _ok(result.model_dump(mode="json"))
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 
