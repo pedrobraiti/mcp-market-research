@@ -7,17 +7,23 @@ dates anchor the entries.
 ## [Unreleased]
 
 ### Added
-- **Crypto spot senses (Tier 1) — 6 tools**, mirroring the equities side, all free & keyless:
-  `crypto_quote`, `crypto_price_history`, `crypto_technicals` (CCXT public, ~100 exchanges),
-  `crypto_asset_profile` (Coinpaprika: supply/market cap/rank/ATH), `crypto_fear_greed`
-  (alternative.me Fear & Greed Index) and `crypto_buzz` (ApeWisdom `all-crypto` filter). Symbols use
-  the CCXT `BASE/QUOTE` format (e.g. `BTC/USDT`) so a researched asset maps to a tradable pair;
-  `crypto_technicals` reuses the existing `analytics.compute_technicals`. Read-only & external —
-  Scout never reads an exchange account (that is the execution side's job). New config
-  `SCOUT_CRYPTO_EXCHANGE` / `SCOUT_CRYPTO_QUOTE_CCY`; new dependency `ccxt`.
-- **38 MCP tools** across 12 free, keyless data sources (yfinance, SEC EDGAR, FRED, World Bank,
-  US Treasury, GDELT, ApeWisdom, Wikimedia, plus stooq as a price fallback; CCXT, Coinpaprika and
-  alternative.me for crypto):
+- **Full crypto spot layer — 21 tools**, mirroring the equities side, all free & keyless. Symbols
+  use the CCXT `BASE/QUOTE` format (e.g. `BTC/USDT`) so a researched asset maps to a tradable pair.
+  Read-only & external — Scout never reads an exchange account (that is the execution side's job).
+  New config `SCOUT_CRYPTO_EXCHANGE` / `SCOUT_CRYPTO_QUOTE_CCY`; new dependency `ccxt`.
+  - **Price/technicals/discovery:** `crypto_quote`, `crypto_price_history`, `crypto_technicals`
+    (reuses `analytics.compute_technicals`), `crypto_search`, `crypto_movers`, `crypto_order_book`,
+    `crypto_compare`, `crypto_correlation_matrix`, `crypto_relative_strength` (CCXT, Coinpaprika).
+  - **Fundamentals/derivatives/sentiment:** `crypto_dossier` (flagship parallel fan-out),
+    `crypto_asset_profile` (Coinpaprika), `crypto_onchain` (mempool.space BTC / Blockscout ETH),
+    `crypto_derivatives` (Binance/Bybit/OKX funding & OI — context only), `crypto_implied_vol`
+    (Deribit DVOL), `crypto_fear_greed` (alternative.me), `crypto_buzz` (ApeWisdom `all-crypto`).
+  - **DeFi/macro:** `crypto_macro` & `crypto_sectors` (CoinGecko), `defi_overview`,
+    `stablecoin_supply`, `defi_yields` (DefiLlama).
+- **53 MCP tools** across 17 free, keyless data sources (yfinance, SEC EDGAR, FRED, World Bank,
+  US Treasury, GDELT, ApeWisdom, Wikimedia, plus stooq as a price fallback; and for crypto: CCXT,
+  Coinpaprika, alternative.me, mempool.space, Blockscout, Binance/Bybit/OKX, Deribit, DefiLlama,
+  CoinGecko):
   - **Discovery:** `search_symbols`, `market_movers`, `sector_performance`, `etf_holdings`,
     `filing_search` (SEC full-text), `news_search` (GDELT).
   - **Company deep-dive:** `company_dossier`, `company_snapshot`, `fundamentals`, `quality_metrics`,
@@ -34,7 +40,7 @@ dates anchor the entries.
 - Indicator math (`analytics.py`): SMA/EMA/RSI/MACD/ATR, 52-week range, return correlation.
 - Resilience: retry/backoff on yfinance, and a transparent **stooq fallback** for price history so
   a yfinance failure doesn't lose data.
-- 114 offline tests; live-validated against every source.
+- 144 offline tests; live-validated against every source.
 
 ### Fixed
 - `dividends`: `had_cut` no longer flags a spurious cut from the **incomplete current calendar

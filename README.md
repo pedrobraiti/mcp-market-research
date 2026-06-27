@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT">
-  <img src="https://img.shields.io/badge/tools-38-orange" alt="38 tools">
+  <img src="https://img.shields.io/badge/tools-53-orange" alt="53 tools">
   <img src="https://img.shields.io/badge/status-live--validated-success" alt="Status: live-validated">
 </p>
 
@@ -21,11 +21,11 @@
 
 ## What this is
 
-**Scout** is an **MCP server** exposing **38 purpose-built tools** an AI agent calls to research a
+**Scout** is an **MCP server** exposing **53 purpose-built tools** an AI agent calls to research a
 company or market — quotes, fundamentals, technicals, options-implied volatility, SEC filings & XBRL
-financials, macro, news, sentiment and attention, plus **crypto spot** (quotes, OHLCV, supply/market
-cap, the Fear & Greed index and Reddit buzz) — gathered from **free, keyless** data sources, in
-parallel, returned as typed, structured data.
+financials, macro, news, sentiment and attention, plus a full **crypto spot** layer (quotes, OHLCV,
+on-chain network health, derivatives funding/OI, DVOL, DeFi TVL/stablecoins/yields, crypto macro and
+sentiment) — gathered from **free, keyless** data sources, in parallel, returned as typed, structured data.
 
 It is the **senses** layer of a three-part split:
 
@@ -78,7 +78,7 @@ across the tools below, then composes the result itself.
 an identifiable User-Agent) — without it the SEC tools (`filings`, `sec_financials`, `filing_search`)
 return a clear "please set it" message; everything else works keyless.
 
-## Tools (38)
+## Tools (53)
 
 **Discovery — find names, not just look them up**
 - `search_symbols(query, limit?)` — company name / partial ticker → symbols (the entry point).
@@ -123,13 +123,32 @@ return a clear "please set it" message; everything else works keyless.
 - `news_digest(symbols[], limit_per_symbol?)` — headlines across a watchlist, newest first.
 - `calendar(symbols[], as_of?)` — upcoming earnings & ex-dividend dates across symbols, sorted.
 
-**Crypto (spot)** — symbols use the CCXT `BASE/QUOTE` format (e.g. `BTC/USDT`, or just `BTC`)
+**Crypto — price, technicals & discovery** (symbols use the CCXT `BASE/QUOTE` format, e.g. `BTC/USDT` or `BTC`)
 - `crypto_quote(symbol)` — live spot quote: last/bid/ask + 24h move (the crypto `company_snapshot`).
 - `crypto_price_history(symbol, timeframe?, limit?, as_of?)` — OHLCV candles (CCXT, ~100 exchanges).
 - `crypto_technicals(symbol, as_of?)` — SMA/EMA/RSI/MACD/ATR for a pair (same math as `technicals`).
+- `crypto_search(query, limit?)` — name / partial symbol → assets (the entry point when you lack the ticker).
+- `crypto_movers(category?, limit?)` — top gainers / losers / most-active pairs (no symbol needed, no 429).
+- `crypto_order_book(symbol, limit?)` — best bid/ask, spread and depth — a pre-trade liquidity/slippage read.
+- `crypto_compare(symbols[])` — several assets side by side (price, market cap, rank, supply).
+- `crypto_correlation_matrix(symbols[], timeframe?, limit?)` — pairwise return correlation (diversification).
+- `crypto_relative_strength(symbols[], benchmark?, timeframe?, limit?)` — return vs a benchmark (default BTC).
+
+**Crypto — fundamentals, derivatives & sentiment**
+- `crypto_dossier(symbol, depth?)` — **flagship:** quote + profile + technicals + Fear & Greed + derivatives + on-chain, **in parallel**.
 - `crypto_asset_profile(symbol)` — supply (circ/total/max), market cap, rank, ATH (**Coinpaprika**).
+- `crypto_onchain(asset?)` — network health: BTC fees/hashrate (**mempool.space**), ETH gas/addresses (**Blockscout**).
+- `crypto_derivatives(symbol)` — perp funding rate & open interest across **Binance/Bybit/OKX** (positioning context).
+- `crypto_implied_vol(asset?)` — the **Deribit** DVOL index ("crypto VIX") for BTC/ETH + history.
 - `crypto_fear_greed(days?)` — the Crypto Fear & Greed Index (0-100) + history (**alternative.me**).
 - `crypto_buzz(symbol?, limit?)` — Reddit crypto mention buzz (**ApeWisdom** `all-crypto`).
+
+**Crypto — DeFi & macro**
+- `crypto_macro()` — total market cap, BTC/ETH dominance, DeFi share (**CoinGecko**).
+- `crypto_sectors()` — per-category (L1/DeFi/AI/memecoin…) performance (**CoinGecko**).
+- `defi_overview(slug?)` — DeFi TVL by chain, or one protocol's breakdown (**DefiLlama**).
+- `stablecoin_supply()` — stablecoin circulation & peg status (**DefiLlama**) — liquidity/systemic-risk read.
+- `defi_yields(chain?, project?, min_tvl?)` — yield/APY pools, filterable (**DefiLlama**).
 
 **Web**
 - `extract(url)` — fetch a page → clean, token-efficient markdown (honestly reports paywalls/blocks).
@@ -143,8 +162,9 @@ without touching the domain. Design principles (stateless, data-not-verdict, poi
 
 ```
 domain/      models + ports (the contracts)
-adapters/    yfinance, SEC EDGAR, FRED, World Bank, US Treasury, GDELT, ApeWisdom, Wikimedia, web, stooq,
-             CCXT, Coinpaprika, alternative.me (crypto)
+adapters/    equities: yfinance, SEC EDGAR, FRED, World Bank, US Treasury, GDELT, ApeWisdom, Wikimedia, web, stooq
+             crypto:   CCXT, Coinpaprika, alternative.me, mempool.space/Blockscout, Binance/Bybit/OKX, Deribit,
+                       DefiLlama, CoinGecko
 research/    meta-tools that fan several ports out in parallel (dossier, compare, correlation, sectors…)
 analytics.py source-agnostic indicator math (SMA/EMA/RSI/MACD/ATR, correlation) — reused for crypto
 server/      MCP server (FastMCP) + dependency composition
@@ -163,9 +183,14 @@ server/      MCP server (FastMCP) + dependency composition
 | **ApeWisdom** | Reddit mention buzz (stocks + crypto) | none |
 | **Wikimedia** | Wikipedia pageviews (attention) | none |
 | **stooq** | daily prices — transparent fallback for yfinance | none |
-| **CCXT** | crypto spot quotes & OHLCV (public, ~100 exchanges) | none (public market data) |
-| **Coinpaprika** | crypto supply, market cap, rank, ATH | none |
+| **CCXT** | crypto spot quotes, OHLCV, movers, order book (~100 exchanges) | none (public market data) |
+| **Coinpaprika** | crypto supply, market cap, rank, ATH, search | none |
 | **alternative.me** | Crypto Fear & Greed Index | none |
+| **mempool.space / Blockscout** | on-chain network health (BTC fees/hashrate, ETH gas/addresses) | none |
+| **Binance / Bybit / OKX** | perp funding rate & open interest (derivatives context) | none (public) |
+| **Deribit** | DVOL implied-volatility index ("crypto VIX") | none |
+| **DefiLlama** | DeFi TVL, stablecoin supply/peg, yield pools | none |
+| **CoinGecko** | crypto macro (dominance, total mcap) & sector performance | none (rate-limited) |
 
 Paid free-tiers (Finnhub/FMP) are pluggable behind the same ports if ever wanted.
 
@@ -173,7 +198,7 @@ Paid free-tiers (Finnhub/FMP) are pluggable behind the same ports if ever wanted
 
 ```bash
 pip install -e ".[dev]"
-pytest -q          # 114 offline tests
+pytest -q          # 144 offline tests
 ruff check .       # lint
 ```
 
