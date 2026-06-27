@@ -127,6 +127,13 @@ async def test_relative_strength_vs_btc():
     assert result.rows[1].excess_vs_benchmark == Decimal("-5.0")
 
 
+async def test_relative_strength_notes_dropped_symbol():
+    market = StubMarket(histories={"BTC": _history("BTC", [100, 110])})  # only benchmark has data
+    result = await build_crypto_relative_strength(market, ["SOL"], "BTC", "1d", 90)
+    assert result.rows == []
+    assert any("SOL" in n for n in result.notes)  # missing symbol is reported, not silently dropped
+
+
 async def test_dossier_full_fans_out_and_computes_technicals():
     closes = [float(100 + i) for i in range(60)]  # enough bars for some indicators
     market = StubMarket(

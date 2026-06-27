@@ -40,7 +40,7 @@ dates anchor the entries.
 - Indicator math (`analytics.py`): SMA/EMA/RSI/MACD/ATR, 52-week range, return correlation.
 - Resilience: retry/backoff on yfinance, and a transparent **stooq fallback** for price history so
   a yfinance failure doesn't lose data.
-- 144 offline tests; live-validated against every source.
+- 145 offline tests; live-validated against every source.
 
 ### Fixed
 - `dividends`: `had_cut` no longer flags a spurious cut from the **incomplete current calendar

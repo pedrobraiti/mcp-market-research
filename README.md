@@ -198,7 +198,7 @@ Paid free-tiers (Finnhub/FMP) are pluggable behind the same ports if ever wanted
 
 ```bash
 pip install -e ".[dev]"
-pytest -q          # 144 offline tests
+pytest -q          # 145 offline tests
 ruff check .       # lint
 ```
 

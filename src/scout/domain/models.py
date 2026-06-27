@@ -749,9 +749,6 @@ class CryptoImpliedVol(BaseModel):
 class DefiTvlItem(BaseModel):
     name: str
     tvl_usd: Decimal | None = None
-    category: str | None = None
-    change_1d: Decimal | None = None
-    change_7d: Decimal | None = None
 
 
 class DefiOverview(BaseModel):
@@ -793,7 +790,6 @@ class DefiYields(BaseModel):
     """DeFi yield/APY pools (DefiLlama), filterable by chain/project/min TVL — context only."""
 
     pools: list[YieldPool] = []
-    note: str | None = None
 
 
 class CryptoMacro(BaseModel):
@@ -908,6 +904,7 @@ class CryptoRelativeStrength(BaseModel):
     benchmark: str
     timeframe: str
     rows: list[CryptoRelStrengthRow] = []
+    notes: list[str] = []
 
 
 class CryptoSymbolMatch(BaseModel):

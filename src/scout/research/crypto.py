@@ -144,24 +144,27 @@ async def build_crypto_relative_strength(
         return (closes[-1] / closes[0] - 1) * 100
 
     returns = dict(zip(all_symbols, (_ret(h) for h in histories), strict=False))
-    bench_ret = returns.get(benchmark.strip().upper())
-    rows = [
-        CryptoRelStrengthRow(
-            symbol=s,
-            return_percent=_q(returns[s], 2),
-            excess_vs_benchmark=(
-                _q(returns[s] - bench_ret, 2)
-                if returns[s] is not None and bench_ret is not None
-                else None
-            ),
+    bench = benchmark.strip().upper()
+    bench_ret = returns.get(bench)
+    notes: list[str] = []
+    if bench_ret is None:
+        notes.append(f"{bench}: benchmark price history unavailable — excess not computed")
+    rows = []
+    for s in clean:
+        if returns.get(s) is None:
+            notes.append(f"{s}: price history unavailable")
+            continue
+        rows.append(
+            CryptoRelStrengthRow(
+                symbol=s,
+                return_percent=_q(returns[s], 2),
+                excess_vs_benchmark=(
+                    _q(returns[s] - bench_ret, 2) if bench_ret is not None else None
+                ),
+            )
         )
-        for s in clean
-        if returns.get(s) is not None
-    ]
     rows.sort(key=lambda r: r.return_percent or Decimal(0), reverse=True)
-    return CryptoRelativeStrength(
-        benchmark=benchmark.strip().upper(), timeframe=timeframe, rows=rows
-    )
+    return CryptoRelativeStrength(benchmark=bench, timeframe=timeframe, rows=rows, notes=notes)
 
 
 async def build_crypto_dossier(
