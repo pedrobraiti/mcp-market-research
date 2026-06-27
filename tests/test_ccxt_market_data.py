@@ -98,3 +98,54 @@ async def test_get_price_history_as_of_truncates():
         "BTC", "1d", 200, as_of=date(2026, 6, 24)
     )
     assert [b.timestamp.date() for b in history.bars] == [date(2026, 6, 23), date(2026, 6, 24)]
+
+
+_TICKERS = {
+    "BTC/USDT": {"last": 60000.0, "percentage": 2.5, "quoteVolume": 9e9},
+    "ETH/USDT": {"last": 3000.0, "percentage": -1.0, "quoteVolume": 5e9},
+    "SOL/USDT": {"last": 150.0, "percentage": 8.0, "quoteVolume": 1e9},
+    "ADA/USDT": {"last": 0.4, "percentage": -3.0, "quoteVolume": 2e8},
+    "ETH/BTC": {"last": 0.05, "percentage": 0.5, "quoteVolume": 1e6},  # wrong quote, excluded
+}
+
+
+def _movers_source():
+    async def fetch_tickers() -> dict:
+        return _TICKERS
+
+    return CcxtMarketData(fetch_tickers=fetch_tickers)
+
+
+async def test_movers_gainers_sorted_and_quote_filtered():
+    result = await _movers_source().get_movers("gainers", limit=3)
+    assert result.category == "gainers"
+    assert [m.base for m in result.movers] == ["SOL", "BTC", "ETH"]  # 8% > 2.5% > -1%
+    assert all(m.symbol.endswith("/USDT") for m in result.movers)  # ETH/BTC excluded
+
+
+async def test_movers_losers_and_most_active():
+    losers = await _movers_source().get_movers("losers", limit=2)
+    assert [m.base for m in losers.movers] == ["ADA", "ETH"]  # -3% then -1%
+    active = await _movers_source().get_movers("most_active", limit=2)
+    assert [m.base for m in active.movers] == ["BTC", "ETH"]  # by quote volume
+
+
+async def test_movers_rejects_bad_category():
+    with pytest.raises(ValueError):
+        await _movers_source().get_movers("biggest")
+
+
+async def test_order_book_spread_and_depth():
+    async def fetch_order_book(symbol: str, limit: int) -> dict:
+        return {
+            "bids": [[100.0, 2.0], [99.0, 3.0]],
+            "asks": [[101.0, 1.0], [102.0, 4.0]],
+        }
+
+    book = await CcxtMarketData(fetch_order_book=fetch_order_book).get_order_book("BTC/USDT")
+    assert book.bid == Decimal("100.0")
+    assert book.ask == Decimal("101.0")
+    assert book.spread == Decimal("1.0")
+    assert book.bid_depth_base == Decimal("5.0")  # 2 + 3
+    assert book.ask_depth_base == Decimal("5.0")  # 1 + 4
+    assert book.levels == 2

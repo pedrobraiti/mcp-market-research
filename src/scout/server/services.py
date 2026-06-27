@@ -11,9 +11,14 @@ from dataclasses import dataclass
 from ..adapters.alternative import AlternativeFearGreed
 from ..adapters.apewisdom import ApeWisdomBuzz
 from ..adapters.ccxt import CcxtMarketData
+from ..adapters.coingecko import CoinGeckoMacro
 from ..adapters.coinpaprika import CoinpaprikaAssets
+from ..adapters.defillama import DefiLlamaDefi
+from ..adapters.deribit import DeribitVol
+from ..adapters.derivatives import DerivativesAggregator
 from ..adapters.fred import FredMacro
 from ..adapters.gdelt import GdeltNewsSearch
+from ..adapters.onchain import OnChainNetwork
 from ..adapters.price_fallback import PriceFallbackMarketData
 from ..adapters.sec import SecEdgar
 from ..adapters.stooq import StooqPrices
@@ -27,8 +32,13 @@ from ..domain.ports import (
     AttentionSource,
     ContentExtractor,
     CryptoAssetSource,
+    CryptoDerivativesSource,
+    CryptoMacroSource,
     CryptoMarketDataSource,
+    CryptoOnChainSource,
     CryptoSentimentSource,
+    CryptoVolSource,
+    DefiSource,
     FilingsSource,
     FinancialsSource,
     MacroSource,
@@ -57,6 +67,11 @@ class Services:
     crypto_assets: CryptoAssetSource | None = None
     crypto_sentiment: CryptoSentimentSource | None = None
     crypto_buzz: RetailBuzzSource | None = None
+    crypto_onchain: CryptoOnChainSource | None = None
+    crypto_derivatives: CryptoDerivativesSource | None = None
+    crypto_vol: CryptoVolSource | None = None
+    defi: DefiSource | None = None
+    crypto_macro: CryptoMacroSource | None = None
 
 
 def build_services(settings: Settings | None = None) -> Services:
@@ -86,4 +101,9 @@ def build_services(settings: Settings | None = None) -> Services:
         crypto_buzz=ApeWisdomBuzz(
             timeout=timeout, filter_name="all-crypto", strip_suffix=True
         ),
+        crypto_onchain=OnChainNetwork(timeout=timeout),
+        crypto_derivatives=DerivativesAggregator(timeout=timeout),
+        crypto_vol=DeribitVol(timeout=timeout),
+        defi=DefiLlamaDefi(timeout=timeout),
+        crypto_macro=CoinGeckoMacro(timeout=timeout),
     )

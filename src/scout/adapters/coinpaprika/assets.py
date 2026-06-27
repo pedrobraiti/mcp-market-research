@@ -15,7 +15,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from ...domain.models import CryptoAssetProfile
+from ...domain.models import CryptoAssetProfile, CryptoSymbolMatch, CryptoSymbolSearch
 
 _SEARCH_URL = "https://api.coinpaprika.com/v1/search/?q={query}&c=currencies&limit=10"
 _TICKER_URL = "https://api.coinpaprika.com/v1/tickers/{coin_id}?quotes=USD"
@@ -106,3 +106,21 @@ class CoinpaprikaAssets:
             ath_date=_date(usd.get("ath_date")),
             percent_from_ath=_dec(usd.get("percent_from_price_ath")),
         )
+
+    async def search(self, query: str, limit: int = 10) -> CryptoSymbolSearch:
+        text = query.strip()
+        if not text:
+            return CryptoSymbolSearch(query=query, matches=[])
+        search = await self._fetch_json(_SEARCH_URL.format(query=text.lower()))
+        currencies = [c for c in ((search or {}).get("currencies") or []) if isinstance(c, dict)]
+        currencies.sort(key=lambda c: _int(c.get("rank")) or 10**9)
+        matches = [
+            CryptoSymbolMatch(
+                base=str(c.get("symbol", "")).upper(),
+                name=c.get("name"),
+                source_id=c.get("id"),
+                rank=_int(c.get("rank")),
+            )
+            for c in currencies[: max(1, min(int(limit), 50))]
+        ]
+        return CryptoSymbolSearch(query=query, matches=matches)

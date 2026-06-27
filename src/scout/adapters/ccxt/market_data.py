@@ -17,10 +17,22 @@ from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from ...domain.models import CryptoBar, CryptoPriceHistory, CryptoQuote
+from ...domain.models import (
+    CryptoBar,
+    CryptoMover,
+    CryptoMoversList,
+    CryptoOrderBook,
+    CryptoPriceHistory,
+    CryptoQuote,
+    OrderBookLevel,
+)
 
 TickerFetch = Callable[[str], Awaitable[dict]]
 OhlcvFetch = Callable[[str, str, int], Awaitable[list]]
+TickersFetch = Callable[[], Awaitable[dict]]
+OrderBookFetch = Callable[[str, int], Awaitable[dict]]
+
+_MOVER_CATEGORIES = ("gainers", "losers", "most_active")
 
 
 def normalize_pair(raw: str, default_quote: str) -> tuple[str, str, str]:
@@ -64,6 +76,8 @@ class CcxtMarketData:
         quote_ccy: str = "USDT",
         fetch_ticker: TickerFetch | None = None,
         fetch_ohlcv: OhlcvFetch | None = None,
+        fetch_tickers: TickersFetch | None = None,
+        fetch_order_book: OrderBookFetch | None = None,
         timeout: float = 15.0,
     ) -> None:
         self._exchange = exchange
@@ -71,6 +85,8 @@ class CcxtMarketData:
         self._timeout = timeout
         self._fetch_ticker = fetch_ticker or self._default_fetch_ticker
         self._fetch_ohlcv = fetch_ohlcv or self._default_fetch_ohlcv
+        self._fetch_tickers = fetch_tickers or self._default_fetch_tickers
+        self._fetch_order_book = fetch_order_book or self._default_fetch_order_book
 
     def _new_exchange(self):
         import ccxt.async_support as ccxt  # lazy import: tests inject and never hit this
@@ -92,6 +108,20 @@ class CcxtMarketData:
         ex = self._new_exchange()
         try:
             return await ex.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+        finally:
+            await ex.close()
+
+    async def _default_fetch_tickers(self) -> dict:
+        ex = self._new_exchange()
+        try:
+            return await ex.fetch_tickers()
+        finally:
+            await ex.close()
+
+    async def _default_fetch_order_book(self, symbol: str, limit: int) -> dict:
+        ex = self._new_exchange()
+        try:
+            return await ex.fetch_order_book(symbol, limit=limit)
         finally:
             await ex.close()
 
@@ -158,4 +188,68 @@ class CcxtMarketData:
             timeframe=timeframe,
             bars=bars,
             as_of=as_of,
+        )
+
+    async def get_movers(self, category: str = "gainers", limit: int = 20) -> CryptoMoversList:
+        cat = category.strip().lower()
+        if cat not in _MOVER_CATEGORIES:
+            raise ValueError(f"category must be one of {_MOVER_CATEGORIES}.")
+        tickers = await self._fetch_tickers() or {}
+        suffix = f"/{self._quote_ccy}"
+        rows: list[CryptoMover] = []
+        for sym, ticker in tickers.items():
+            if not isinstance(ticker, dict) or not str(sym).endswith(suffix):
+                continue
+            rows.append(
+                CryptoMover(
+                    symbol=str(sym),
+                    base=str(sym)[: -len(suffix)],
+                    last=_dec(ticker.get("last")),
+                    change_percent_24h=_dec(ticker.get("percentage")),
+                    quote_volume_24h=_dec(ticker.get("quoteVolume")),
+                )
+            )
+        if cat == "most_active":
+            rows.sort(key=lambda r: r.quote_volume_24h or Decimal(0), reverse=True)
+        else:
+            rows = [r for r in rows if r.change_percent_24h is not None]
+            rows.sort(key=lambda r: r.change_percent_24h, reverse=(cat == "gainers"))
+        return CryptoMoversList(
+            category=cat,
+            exchange=self._exchange,
+            quote=self._quote_ccy,
+            movers=rows[: max(1, min(int(limit), 100))],
+        )
+
+    async def get_order_book(self, symbol: str, limit: int = 20) -> CryptoOrderBook | None:
+        pair, _, _ = normalize_pair(symbol, self._quote_ccy)
+        capped = max(1, min(int(limit), 100))
+        book = await self._fetch_order_book(pair, capped)
+        if not book:
+            return None
+        bids = [lvl for lvl in (book.get("bids") or []) if lvl and len(lvl) >= 2]
+        asks = [lvl for lvl in (book.get("asks") or []) if lvl and len(lvl) >= 2]
+        best_bid = _dec(bids[0][0]) if bids else None
+        best_ask = _dec(asks[0][0]) if asks else None
+        spread = best_ask - best_bid if best_bid is not None and best_ask is not None else None
+        mid = (
+            (best_bid + best_ask) / 2
+            if best_bid is not None and best_ask is not None
+            else None
+        )
+        spread_pct = (
+            (spread / mid * 100) if spread is not None and mid not in (None, Decimal(0)) else None
+        )
+        return CryptoOrderBook(
+            symbol=pair,
+            exchange=self._exchange,
+            bid=best_bid,
+            ask=best_ask,
+            spread=spread,
+            spread_percent=spread_pct,
+            bid_depth_base=sum((_dec(lvl[1]) or Decimal(0)) for lvl in bids) or None,
+            ask_depth_base=sum((_dec(lvl[1]) or Decimal(0)) for lvl in asks) or None,
+            levels=max(len(bids), len(asks)),
+            top_bids=[OrderBookLevel(price=_dec(lvl[0]), amount=_dec(lvl[1])) for lvl in bids[:10]],
+            top_asks=[OrderBookLevel(price=_dec(lvl[0]), amount=_dec(lvl[1])) for lvl in asks[:10]],
         )

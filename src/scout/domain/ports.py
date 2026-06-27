@@ -15,9 +15,19 @@ from .models import (
     AnalystView,
     CompanySnapshot,
     CryptoAssetProfile,
+    CryptoDerivatives,
     CryptoFearGreed,
+    CryptoImpliedVol,
+    CryptoMacro,
+    CryptoMoversList,
+    CryptoOnChain,
+    CryptoOrderBook,
     CryptoPriceHistory,
     CryptoQuote,
+    CryptoSectors,
+    CryptoSymbolSearch,
+    DefiOverview,
+    DefiYields,
     DividendHistory,
     EarningsInfo,
     EtfHoldings,
@@ -35,6 +45,7 @@ from .models import (
     QualityMetrics,
     RetailBuzz,
     SecFinancials,
+    StablecoinSupply,
     SymbolSearch,
     TreasuryData,
     WebNewsSearch,
@@ -232,6 +243,14 @@ class CryptoMarketDataSource(Protocol):
         """OHLCV candles for a pair, most recent ``limit`` bars truncated at/before ``as_of``."""
         ...
 
+    async def get_movers(self, category: str = "gainers", limit: int = 20) -> CryptoMoversList:
+        """Top gainers / losers / most-active pairs on the configured exchange."""
+        ...
+
+    async def get_order_book(self, symbol: str, limit: int = 20) -> CryptoOrderBook | None:
+        """Top-of-book + aggregated depth for a pair — a pre-trade liquidity/slippage read."""
+        ...
+
 
 @runtime_checkable
 class CryptoAssetSource(Protocol):
@@ -241,6 +260,10 @@ class CryptoAssetSource(Protocol):
         """Supply/market-cap/rank/ATH for a base asset (e.g. ``BTC``). ``None`` if not found."""
         ...
 
+    async def search(self, query: str, limit: int = 10) -> CryptoSymbolSearch:
+        """Resolve a free-text query (name / partial symbol) to crypto assets."""
+        ...
+
 
 @runtime_checkable
 class CryptoSentimentSource(Protocol):
@@ -248,4 +271,63 @@ class CryptoSentimentSource(Protocol):
 
     async def get_fear_greed(self, days: int = 30) -> CryptoFearGreed:
         """Current Fear & Greed index plus the daily history over the last ``days``."""
+        ...
+
+
+@runtime_checkable
+class CryptoOnChainSource(Protocol):
+    """On-chain network-health metrics (mempool.space for BTC, Blockscout for ETH today)."""
+
+    async def get_onchain(self, asset: str = "BTC") -> CryptoOnChain:
+        """Network metrics (fees, hashrate, gas, addresses) for a chain."""
+        ...
+
+
+@runtime_checkable
+class CryptoDerivativesSource(Protocol):
+    """Perp funding rate & open interest across exchanges — positioning context (never executed)."""
+
+    async def get_derivatives(self, base: str) -> CryptoDerivatives:
+        """Funding rate + open interest per venue for a base asset."""
+        ...
+
+
+@runtime_checkable
+class CryptoVolSource(Protocol):
+    """Options-implied volatility (Deribit DVOL today)."""
+
+    async def get_implied_vol(self, asset: str = "BTC") -> CryptoImpliedVol:
+        """The DVOL index ('crypto VIX') current value plus recent history."""
+        ...
+
+
+@runtime_checkable
+class DefiSource(Protocol):
+    """DeFi ecosystem data: TVL, stablecoins, yields (DefiLlama today)."""
+
+    async def get_tvl(self, slug: str | None = None) -> DefiOverview:
+        """Total value locked by chain (no slug) or one protocol's breakdown (with slug)."""
+        ...
+
+    async def get_stablecoins(self) -> StablecoinSupply:
+        """Stablecoin circulation and peg status."""
+        ...
+
+    async def get_yields(
+        self, chain: str | None = None, project: str | None = None, min_tvl: float = 1_000_000
+    ) -> DefiYields:
+        """Yield/APY pools, filterable by chain/project/min TVL."""
+        ...
+
+
+@runtime_checkable
+class CryptoMacroSource(Protocol):
+    """Crypto-wide macro & sector data (CoinGecko today)."""
+
+    async def get_macro(self) -> CryptoMacro:
+        """Total market cap, BTC/ETH dominance and DeFi share."""
+        ...
+
+    async def get_sectors(self) -> CryptoSectors:
+        """Per-category (sector) performance."""
         ...

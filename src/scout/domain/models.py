@@ -677,3 +677,267 @@ class CryptoFearGreed(BaseModel):
     classification: str | None = None
     observation_date: date | None = None
     history: list[FearGreedPoint] = []
+
+
+# --- Crypto Tier 2: on-chain, derivatives, implied volatility -----------------------------
+
+
+class OnChainMetric(BaseModel):
+    name: str
+    value: Decimal | None = None
+    unit: str | None = None
+
+
+class CryptoOnChain(BaseModel):
+    """Network-health metrics for a chain (BTC fees/hashrate, ETH gas/addresses, …).
+
+    Heterogeneous across chains, so metrics are a labelled list. Raw on-chain facts, not a verdict.
+    """
+
+    asset: str
+    source: str
+    metrics: list[OnChainMetric] = []
+    note: str | None = None
+
+
+class DerivativesVenue(BaseModel):
+    exchange: str
+    symbol: str | None = None
+    funding_rate: Decimal | None = None
+    next_funding_time: datetime | None = None
+    mark_price: Decimal | None = None
+    open_interest: Decimal | None = None
+    open_interest_value: Decimal | None = None
+
+
+class CryptoDerivatives(BaseModel):
+    """Perp funding rate and open interest across exchanges — positioning CONTEXT, never executed.
+
+    The execution side is spot-only; this is a sentiment/positioning read (funding sign & size, OI
+    trend). Raw numbers per venue; the agent interprets crowding.
+    """
+
+    base: str
+    venues: list[DerivativesVenue] = []
+    note: str | None = None
+
+
+class VolPoint(BaseModel):
+    timestamp: datetime
+    open: Decimal | None = None
+    high: Decimal | None = None
+    low: Decimal | None = None
+    close: Decimal | None = None
+
+
+class CryptoImpliedVol(BaseModel):
+    """The Deribit DVOL index ('crypto VIX') — current value plus recent history.
+
+    Options-implied volatility for BTC/ETH: how much swing the options market is pricing. Raw
+    index, useful to size a stop or gauge the vol regime — not a trade call.
+    """
+
+    asset: str
+    dvol_current: Decimal | None = None
+    history: list[VolPoint] = []
+    note: str | None = None
+
+
+# --- Crypto Tier 3: DeFi, stablecoins, yields, macro, sectors ------------------------------
+
+
+class DefiTvlItem(BaseModel):
+    name: str
+    tvl_usd: Decimal | None = None
+    category: str | None = None
+    change_1d: Decimal | None = None
+    change_7d: Decimal | None = None
+
+
+class DefiOverview(BaseModel):
+    """DeFi total value locked — by chain (no slug) or one protocol's breakdown (with slug)."""
+
+    scope: str  # "chains" or a protocol slug
+    total_tvl_usd: Decimal | None = None
+    items: list[DefiTvlItem] = []
+
+
+class StablecoinItem(BaseModel):
+    symbol: str | None = None
+    name: str | None = None
+    peg_type: str | None = None
+    peg_mechanism: str | None = None
+    price: Decimal | None = None
+    peg_deviation: Decimal | None = None  # price - 1.0 for USD-pegged
+    circulating_usd: Decimal | None = None
+
+
+class StablecoinSupply(BaseModel):
+    """Stablecoin circulation and peg status (DefiLlama) — liquidity & systemic-risk read."""
+
+    total_circulating_usd: Decimal | None = None
+    items: list[StablecoinItem] = []
+
+
+class YieldPool(BaseModel):
+    project: str | None = None
+    chain: str | None = None
+    symbol: str | None = None
+    tvl_usd: Decimal | None = None
+    apy: Decimal | None = None
+    apy_base: Decimal | None = None
+    apy_reward: Decimal | None = None
+
+
+class DefiYields(BaseModel):
+    """DeFi yield/APY pools (DefiLlama), filterable by chain/project/min TVL — context only."""
+
+    pools: list[YieldPool] = []
+    note: str | None = None
+
+
+class CryptoMacro(BaseModel):
+    """Crypto-wide macro snapshot (CoinGecko): total market cap, dominance, DeFi share."""
+
+    total_market_cap_usd: Decimal | None = None
+    total_volume_24h_usd: Decimal | None = None
+    market_cap_change_percent_24h: Decimal | None = None
+    btc_dominance: Decimal | None = None
+    eth_dominance: Decimal | None = None
+    defi_market_cap_usd: Decimal | None = None
+    defi_dominance: Decimal | None = None
+    active_cryptocurrencies: int | None = None
+
+
+class CryptoCategory(BaseModel):
+    name: str
+    market_cap_usd: Decimal | None = None
+    market_cap_change_24h: Decimal | None = None
+    volume_24h_usd: Decimal | None = None
+    top_3_coins: list[str] = []
+
+
+class CryptoSectors(BaseModel):
+    """Per-category (sector) performance for crypto (CoinGecko) — where money rotated."""
+
+    categories: list[CryptoCategory] = []
+
+
+# --- Crypto parity / discovery -------------------------------------------------------------
+
+
+class CryptoMover(BaseModel):
+    symbol: str
+    base: str | None = None
+    last: Decimal | None = None
+    change_percent_24h: Decimal | None = None
+    quote_volume_24h: Decimal | None = None
+
+
+class CryptoMoversList(BaseModel):
+    """Market-wide top gainers / losers / most-active crypto pairs on the configured exchange."""
+
+    category: str
+    exchange: str
+    quote: str
+    movers: list[CryptoMover] = []
+
+
+class OrderBookLevel(BaseModel):
+    price: Decimal | None = None
+    amount: Decimal | None = None
+
+
+class CryptoOrderBook(BaseModel):
+    """Top-of-book and aggregated depth for a pair — a pre-trade liquidity/slippage read."""
+
+    symbol: str
+    exchange: str
+    bid: Decimal | None = None
+    ask: Decimal | None = None
+    spread: Decimal | None = None
+    spread_percent: Decimal | None = None
+    bid_depth_base: Decimal | None = None
+    ask_depth_base: Decimal | None = None
+    levels: int | None = None
+    top_bids: list[OrderBookLevel] = []
+    top_asks: list[OrderBookLevel] = []
+
+
+class CryptoComparisonRow(BaseModel):
+    symbol: str
+    base: str
+    last: Decimal | None = None
+    change_percent_24h: Decimal | None = None
+    market_cap_usd: Decimal | None = None
+    rank: int | None = None
+    circulating_supply: Decimal | None = None
+    note: str | None = None
+
+
+class CryptoComparison(BaseModel):
+    """Several crypto assets side by side (quote + profile), in one call."""
+
+    items: list[CryptoComparisonRow] = []
+
+
+class CryptoCorrelationPair(BaseModel):
+    a: str
+    b: str
+    correlation: Decimal | None = None
+
+
+class CryptoCorrelation(BaseModel):
+    """Pairwise return correlation between crypto pairs — real diversification."""
+
+    timeframe: str
+    bars_used: int | None = None
+    pairs: list[CryptoCorrelationPair] = []
+    note: str | None = None
+
+
+class CryptoRelStrengthRow(BaseModel):
+    symbol: str
+    return_percent: Decimal | None = None
+    excess_vs_benchmark: Decimal | None = None
+
+
+class CryptoRelativeStrength(BaseModel):
+    """Each pair's return over a window vs a benchmark (default BTC) — leadership read."""
+
+    benchmark: str
+    timeframe: str
+    rows: list[CryptoRelStrengthRow] = []
+
+
+class CryptoSymbolMatch(BaseModel):
+    base: str
+    name: str | None = None
+    source_id: str | None = None
+    rank: int | None = None
+
+
+class CryptoSymbolSearch(BaseModel):
+    """Crypto assets matching a free-text query (name / partial symbol)."""
+
+    query: str
+    matches: list[CryptoSymbolMatch] = []
+
+
+class CryptoDossier(BaseModel):
+    """Consolidated one-call crypto portrait — fans several reads out in parallel.
+
+    The crypto flagship: quote, asset profile, technicals, market-wide Fear & Greed, derivatives
+    positioning and on-chain health gathered concurrently. ``notes`` carries any partial failure.
+    """
+
+    symbol: str
+    base: str
+    quote: str
+    quote_data: CryptoQuote | None = None
+    profile: CryptoAssetProfile | None = None
+    technicals: Technicals | None = None
+    fear_greed: CryptoFearGreed | None = None
+    derivatives: CryptoDerivatives | None = None
+    onchain: CryptoOnChain | None = None
+    notes: list[str] = []

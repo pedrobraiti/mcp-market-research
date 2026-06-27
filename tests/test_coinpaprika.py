@@ -75,3 +75,28 @@ async def test_get_profile_prefers_exact_symbol_match():
 async def test_get_profile_none_when_no_match():
     profile = await _source(search={"currencies": []}).get_profile("NOTACOIN")
     assert profile is None
+
+
+async def test_search_returns_matches_sorted_by_rank():
+    search = {
+        "currencies": [
+            {"id": "eth-ethereum", "name": "Ethereum", "symbol": "ETH", "rank": 2},
+            {"id": "etc-classic", "name": "Ethereum Classic", "symbol": "ETC", "rank": 30},
+        ]
+    }
+
+    async def _fetch(url: str):
+        return search
+
+    result = await CoinpaprikaAssets(fetch_json=_fetch).search("eth", limit=5)
+    assert result.query == "eth"
+    assert [m.base for m in result.matches] == ["ETH", "ETC"]  # rank-sorted
+    assert result.matches[0].source_id == "eth-ethereum"
+
+
+async def test_search_empty_query():
+    async def _fetch(url: str):
+        raise AssertionError("should not fetch on empty query")
+
+    result = await CoinpaprikaAssets(fetch_json=_fetch).search("  ")
+    assert result.matches == []

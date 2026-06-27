@@ -20,6 +20,10 @@ from ..research import (
     build_classification,
     build_comparison,
     build_correlation,
+    build_crypto_comparison,
+    build_crypto_correlation,
+    build_crypto_dossier,
+    build_crypto_relative_strength,
     build_dossier,
     build_news_digest,
     build_relative_strength,
@@ -787,6 +791,304 @@ async def crypto_buzz(symbol: str | None = None, limit: int = 20) -> dict:
     try:
         result = await svc.crypto_buzz.get_buzz(symbol, int(limit))
         return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_search(query: str, limit: int = 10) -> dict:
+    """Resolve a crypto name or partial symbol to assets (the entry point when you lack the ticker).
+
+    Crypto naming is messy (many forks/clones share a symbol); this returns candidates with base,
+    name, provider id and rank (best/most-prominent first) so you pick the right one, then feed the
+    base to the other crypto tools. Coinpaprika, keyless.
+    """
+    svc = services()
+    if svc.crypto_assets is None:
+        return _err(ValueError("Crypto asset source is not configured."))
+    try:
+        result = await svc.crypto_assets.search(query, int(limit))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_movers(category: str = "gainers", limit: int = 20) -> dict:
+    """Market-wide top crypto movers on the configured exchange — discovery WITHOUT a symbol.
+
+    `category` is "gainers", "losers" or "most_active" (by 24h quote volume). Returns the pairs
+    moving most today (symbol, last, % change, volume) so you can ask "what's moving in crypto?"
+    before you have a ticker. Uses the exchange's own tickers (no 429 issues). Raw, not a pick.
+    """
+    svc = services()
+    if svc.crypto_market_data is None:
+        return _err(ValueError("Crypto market data is not configured."))
+    try:
+        result = await svc.crypto_market_data.get_movers(category, int(limit))
+        return _ok(result.model_dump(mode="json"))
+    except ValueError as exc:
+        return _err(exc)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_order_book(symbol: str, limit: int = 20) -> dict:
+    """Order-book top-of-book and aggregated depth for a pair — a pre-trade liquidity/slippage read.
+
+    Returns best bid/ask, the spread (absolute & %), aggregated base-asset depth per side and the
+    top levels. Use it to judge whether a pair is liquid enough to size into without bad slippage —
+    e.g. before a market buy. `data` is null if no book is returned. Raw microstructure, not a call.
+    """
+    svc = services()
+    if svc.crypto_market_data is None:
+        return _err(ValueError("Crypto market data is not configured."))
+    try:
+        result = await svc.crypto_market_data.get_order_book(symbol, int(limit))
+        return _ok(result.model_dump(mode="json") if result else None)
+    except ValueError as exc:
+        return _err(exc)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_compare(symbols: list[str]) -> dict:
+    """Compare several crypto assets side by side in one call.
+
+    For each symbol, gathers price + 24h change (quote) and market cap, rank & circulating supply
+    (profile), in parallel. A symbol whose data is unavailable still appears, with a `note`. Raw
+    figures to weigh, not a ranking.
+    """
+    svc = services()
+    if svc.crypto_market_data is None or svc.crypto_assets is None:
+        return _err(ValueError("Crypto sources are not configured."))
+    try:
+        result = await build_crypto_comparison(svc.crypto_market_data, svc.crypto_assets, symbols)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_correlation_matrix(
+    symbols: list[str], timeframe: str = "1d", limit: int = 120
+) -> dict:
+    """Pairwise return correlation between crypto pairs — to see real diversification.
+
+    Fetches each pair's candles over `limit` bars at `timeframe`, aligns them on common days and
+    returns the Pearson correlation of returns for every pair (1.0 = move together, ~0 = unrelated).
+    Crypto is highly co-correlated (most alts track BTC) — this quantifies it. Needs ≥2 pairs.
+    """
+    svc = services()
+    if svc.crypto_market_data is None:
+        return _err(ValueError("Crypto market data is not configured."))
+    try:
+        result = await build_crypto_correlation(
+            svc.crypto_market_data, symbols, timeframe.strip(), int(limit)
+        )
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_relative_strength(
+    symbols: list[str], benchmark: str = "BTC", timeframe: str = "1d", limit: int = 90
+) -> dict:
+    """Each pair's return over a window vs a benchmark (default BTC) — the leadership read.
+
+    Returns each symbol's % return and its excess over the benchmark, strongest first. "Is this alt
+    outperforming BTC?" is the core crypto rotation question. Raw returns, not a buy call.
+    """
+    svc = services()
+    if svc.crypto_market_data is None:
+        return _err(ValueError("Crypto market data is not configured."))
+    try:
+        result = await build_crypto_relative_strength(
+            svc.crypto_market_data, symbols, benchmark.strip(), timeframe.strip(), int(limit)
+        )
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_onchain(asset: str = "BTC") -> dict:
+    """On-chain network-health metrics for a chain (raw facts, not a verdict).
+
+    `asset` is "BTC" (mempool.space: recommended fees, hashrate, difficulty change) or "ETH"
+    (Blockscout: total addresses/transactions, gas prices, network utilization). The crypto analog
+    of fundamentals — chain activity & cost. Other assets return a note (no keyless source wired).
+    """
+    svc = services()
+    if svc.crypto_onchain is None:
+        return _err(ValueError("Crypto on-chain source is not configured."))
+    try:
+        result = await svc.crypto_onchain.get_onchain(asset)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_derivatives(symbol: str) -> dict:
+    """Perp funding rate & open interest across exchanges — positioning CONTEXT (never executed).
+
+    For a base asset (e.g. "BTC"), returns per-venue (Binance, Bybit, OKX) the perpetual funding
+    rate, next funding time, mark price and open interest. High positive funding = crowded longs;
+    rising OI = leverage building. Execution is spot-only, so this is sentiment only — not a trade.
+    """
+    svc = services()
+    if svc.crypto_derivatives is None:
+        return _err(ValueError("Crypto derivatives source is not configured."))
+    try:
+        result = await svc.crypto_derivatives.get_derivatives(symbol)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_implied_vol(asset: str = "BTC") -> dict:
+    """The Deribit DVOL index ('crypto VIX') — options-implied volatility for BTC or ETH.
+
+    Returns the current DVOL value plus recent daily history. It's how much swing the options market
+    is pricing — useful to size a stop or read whether vol is cheap/expensive. BTC/ETH only (others
+    return a note). Raw index, not a trade call.
+    """
+    svc = services()
+    if svc.crypto_vol is None:
+        return _err(ValueError("Crypto volatility source is not configured."))
+    try:
+        result = await svc.crypto_vol.get_implied_vol(asset)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def defi_overview(slug: str | None = None) -> dict:
+    """DeFi total value locked (TVL) — by chain, or one protocol's breakdown.
+
+    Without `slug`, returns total DeFi TVL and the top chains by TVL. With `slug` (e.g. "aave",
+    "uniswap"), returns that protocol's TVL split by chain. Ecosystem traction/health (DefiLlama,
+    keyless). Raw TVL, not a verdict.
+    """
+    svc = services()
+    if svc.defi is None:
+        return _err(ValueError("DeFi source is not configured."))
+    try:
+        result = await svc.defi.get_tvl(slug)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def stablecoin_supply() -> dict:
+    """Stablecoin circulation and peg status (DefiLlama) — liquidity & systemic-risk read.
+
+    Returns total stablecoin circulation and the largest stablecoins with peg type/mechanism, price
+    and peg deviation. A depeg or a sharp circulation change is a market-wide risk signal the agent
+    should weigh (e.g. before sizing into a USDT-quoted pair). Raw facts, not a verdict.
+    """
+    svc = services()
+    if svc.defi is None:
+        return _err(ValueError("DeFi source is not configured."))
+    try:
+        result = await svc.defi.get_stablecoins()
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def defi_yields(
+    chain: str | None = None, project: str | None = None, min_tvl: float = 1_000_000
+) -> dict:
+    """DeFi yield/APY pools (DefiLlama), filterable — where on-chain yield is, as context.
+
+    Returns pools (project, chain, symbol, TVL, APY incl. base vs reward), highest APY first,
+    filtered by `chain`, `project` and `min_tvl` (USD floor, default $1M to skip dust). Context for
+    where capital earns on-chain — not a recommendation to farm.
+    """
+    svc = services()
+    if svc.defi is None:
+        return _err(ValueError("DeFi source is not configured."))
+    try:
+        result = await svc.defi.get_yields(chain, project, float(min_tvl))
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_macro() -> dict:
+    """Crypto-wide macro snapshot: total market cap, BTC/ETH dominance, DeFi share (CoinGecko).
+
+    Returns total crypto market cap & 24h volume, the 24h market-cap change, BTC and ETH dominance,
+    and DeFi market cap/dominance — the regime backdrop (alt season vs BTC-dominant). Note:
+    CoinGecko's keyless tier rate-limits; a 429 returns an honest error. Raw levels, not a call.
+    """
+    svc = services()
+    if svc.crypto_macro is None:
+        return _err(ValueError("Crypto macro source is not configured."))
+    try:
+        result = await svc.crypto_macro.get_macro()
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_sectors() -> dict:
+    """Per-category (sector) performance for crypto (CoinGecko) — where money rotated.
+
+    Returns crypto categories (L1, DeFi, AI, memecoin, RWA…) with market cap, 24h change, volume and
+    top coins — the crypto analog of `sector_performance`. Note: CoinGecko keyless rate-limits (429
+    returns an honest error). Raw returns, not a rotation call.
+    """
+    svc = services()
+    if svc.crypto_macro is None:
+        return _err(ValueError("Crypto macro source is not configured."))
+    try:
+        result = await svc.crypto_macro.get_sectors()
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def crypto_dossier(symbol: str, depth: str = "full") -> dict:
+    """Consolidated one-call crypto portrait — the flagship, fanning several reads out in parallel.
+
+    Returns a `quote_data` + `profile`, plus (when `depth="full"`, the default) `technicals`,
+    market-wide `fear_greed`, `derivatives` positioning and `onchain` health — all concurrently.
+    Use `depth="summary"` for quote + profile only. Partial failures are recorded in `notes`. Prefer
+    this over calling the crypto tools one by one when you want the full picture of a pair at once.
+    """
+    svc = services()
+    if (
+        svc.crypto_market_data is None
+        or svc.crypto_assets is None
+        or svc.crypto_sentiment is None
+        or svc.crypto_derivatives is None
+        or svc.crypto_onchain is None
+    ):
+        return _err(ValueError("Crypto sources are not configured."))
+    try:
+        dossier = await build_crypto_dossier(
+            svc.crypto_market_data,
+            svc.crypto_assets,
+            svc.crypto_sentiment,
+            svc.crypto_derivatives,
+            svc.crypto_onchain,
+            symbol,
+            depth.strip().lower(),
+        )
+        return _ok(dossier.model_dump(mode="json"))
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 
