@@ -1,7 +1,7 @@
 """Domain models — agnostic to the concrete data source.
 
 Monetary and ratio values use ``Decimal`` to avoid floating-point noise (mirrors the
-mcp-ibkr-agent convention). Every research model carries an optional ``as_of`` date: when
+agentic-trading-mcp convention). Every research model carries an optional ``as_of`` date: when
 ``None`` the data is the latest/real-time read; when set, it is (best-effort) the snapshot
 as of that date. ``as_of`` is what lets the calling agent compose two stateless reads into
 a "what changed since I bought?" diff — Scout never stores the date, it receives it.

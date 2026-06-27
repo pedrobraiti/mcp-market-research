@@ -12,7 +12,7 @@ this public log.)
 agent. It does not place orders and does not decide what to buy or sell.
 
 **Why.** It is one piece of a three-part split: **execution** lives in a separate broker MCP
-([mcp-ibkr-agent](https://github.com/pedrobraiti/mcp-ibkr-agent), the "hands"), **decisions**
+([agentic-trading-mcp](https://github.com/pedrobraiti/agentic-trading-mcp), the "hands"), **decisions**
 live in the calling agent / strategy skill (the "brain"), and Scout is the **senses**. Keeping
 data capture independent of both keeps each piece simple, testable and swappable.
 

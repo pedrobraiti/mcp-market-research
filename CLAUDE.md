@@ -2,7 +2,7 @@
 
 ## Sobre o projeto (leitura rápida)
 
-`mcp-market-research` (nome amigável **Scout**) é um **MCP server de coleta e análise de dados financeiros** para agentes de IA — a camada de **sentidos**. Faz par com o `mcp-ibkr-agent` (**Valet**, execução na Interactive Brokers). O **cérebro é o Claude Code**: ele raciocina e decide; a estratégia mora numa **skill** (`/analyze`, `/invest`), não em código. Este repo entrega só os **dados** (tools gordas, com paralelismo interno) e não envia ordens. Repo **público**, docs em inglês, **sem segredos versionados**, fontes de dados **gratuitas** primeiro. Detalhes em `.claude/context.md` e `.claude/decisions.md`.
+`mcp-market-research` (nome amigável **Scout**) é um **MCP server de coleta e análise de dados financeiros** para agentes de IA — a camada de **sentidos**. Faz par com o `agentic-trading-mcp` (**Valet**, execução — monorepo com dois servidores MCP: `ibkr` para ações/ETFs e `crypto` para spot via CCXT). O **cérebro é o Claude Code**: ele raciocina e decide; a estratégia mora numa **skill** única dirigida por linguagem natural (**Vizier**, `/vizier`), não em código. Este repo entrega só os **dados** (tools gordas, com paralelismo interno) e não envia ordens. Repo **público**, docs em inglês, **sem segredos versionados**, fontes de dados **gratuitas** primeiro. Detalhes em `.claude/context.md` e `.claude/decisions.md`.
 
 ## Memória persistente
 
@@ -43,7 +43,7 @@ O `.claude/handoff.md` é o que permite a **próxima sessão começar de onde es
 
 ## Arquitetura
 
-Seguir os padrões definidos em `~/.claude/rules/BEST_PRACTICES.md` (código profissional, modular, testável; arquitetura escolhida conforme o projeto). Espelhar o padrão de qualidade do `mcp-ibkr-agent`: hexagonal (ports & adapters), envelope de retorno `{ok, data}`, CI com ruff + pytest, ADRs em `.claude/decisions.md`.
+Seguir os padrões definidos em `~/.claude/rules/BEST_PRACTICES.md` (código profissional, modular, testável; arquitetura escolhida conforme o projeto). Espelhar o padrão de qualidade do `agentic-trading-mcp`: hexagonal (ports & adapters), envelope de retorno `{ok, data}`, CI com ruff + pytest, ADRs em `.claude/decisions.md`.
 
 ## Autonomia
 
