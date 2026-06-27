@@ -6,7 +6,7 @@
   <em>Valet trades, Scout researches.</em> The <strong>senses</strong> layer of an agentic-trading
   stack — it gives an AI agent (like Claude Code) the data to research any US stock or ETF, in depth,
   from <strong>free</strong> sources. Pairs with
-  <a href="https://github.com/pedrobraiti/mcp-ibkr-agent">mcp-ibkr-agent</a> (execution).
+  <a href="https://github.com/pedrobraiti/agentic-trading-mcp">agentic-trading-mcp</a> (execution).
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
 </p>
 
 > **Not financial advice.** A research and data-gathering tool. It does **not** place orders and
-> does **not** decide what to buy — that is the agent's and `mcp-ibkr-agent`'s job. Use at your own risk.
+> does **not** decide what to buy — that is the agent's and `agentic-trading-mcp`'s job. Use at your own risk.
 
 ## What this is
 
@@ -30,7 +30,7 @@ It is the **senses** layer of a three-part split:
 
 - **Brain** — the agent (Claude Code), reasoning over the data and deciding *what/when* to invest.
 - **Senses** — **Scout** (this repo): data & info gathering. **Stateless, data-only.**
-- **Hands** — [`mcp-ibkr-agent`](https://github.com/pedrobraiti/mcp-ibkr-agent): execution on Interactive Brokers.
+- **Hands** — [`agentic-trading-mcp`](https://github.com/pedrobraiti/agentic-trading-mcp): execution on Interactive Brokers (stocks/ETFs) and crypto exchanges (spot, via CCXT).
 
 Scope: primarily **US equities & ETFs** (what the broker can trade). Every tool returns an
 `{"ok": ..., "data": ...}` envelope and most accept an optional `as_of` (point-in-time) date.
@@ -127,7 +127,7 @@ return a clear "please set it" message; everything else works keyless.
 
 ## Architecture
 
-Hexagonal (ports & adapters), mirroring `mcp-ibkr-agent`: the agent talks only to the MCP tools; each
+Hexagonal (ports & adapters), mirroring `agentic-trading-mcp`: the agent talks only to the MCP tools; each
 data source is a swappable adapter behind a port, so a free source can be replaced or complemented
 without touching the domain. Design principles (stateless, data-not-verdict, point-in-time) in
 [DECISIONS.md](DECISIONS.md).
