@@ -29,7 +29,7 @@ sentiment) — gathered from **free, keyless** data sources, in parallel, return
 
 It is the **senses** layer of a three-part split:
 
-- **Brain** — the agent (Claude Code), reasoning over the data and deciding *what/when* to invest.
+- **Brain** — [**Vizier**](https://github.com/pedrobraiti/vizier-trading-skill): the Claude Code skill that researches, decides *what/when*, and orchestrates this repo + the execution layer.
 - **Senses** — **Scout** (this repo): data & info gathering. **Stateless, data-only.**
 - **Hands** — [`agentic-trading-mcp`](https://github.com/pedrobraiti/agentic-trading-mcp): execution on Interactive Brokers (stocks/ETFs) and crypto exchanges (spot, via CCXT).
 
