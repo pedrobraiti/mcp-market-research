@@ -352,6 +352,68 @@ def momentum_12_1(closes: list[float]) -> float | None:
     return recent / far - 1
 
 
+# --- Macro transforms ------------------------------------------------------------
+# Generic statistics reused by the FRED-derived macro layer. Pure (numbers in, number
+# out); the date alignment that builds these series lives in the macro adapter. They
+# turn raw FRED series (a CPI index level, a VIX print) into regime numbers the agent
+# can act on — still measures, never a "risk-on" verdict (ADR-004).
+
+
+def normal_cdf(x: float) -> float:
+    """Standard normal CDF via the error function (stdlib ``math.erf`` — no scipy)."""
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def zscore_of_last(values: list[float]) -> float | None:
+    """Z-score of the most recent value against its window (sample stdev)."""
+    if len(values) < 2:
+        return None
+    sd = _stdev(values, sample=True)
+    if not sd:
+        return None
+    return (values[-1] - _mean(values)) / sd
+
+
+def percentile_of_last(values: list[float]) -> float | None:
+    """Fraction of the window at or below the most recent value, 0..1."""
+    n = len(values)
+    if n < 2:
+        return None
+    last = values[-1]
+    return sum(1 for v in values if v <= last) / n
+
+
+def trailing_negative_run(values: list[float]) -> int:
+    """Count of consecutive most-recent values strictly below zero (e.g. days inverted)."""
+    run = 0
+    for value in reversed(values):
+        if value < 0:
+            run += 1
+        else:
+            break
+    return run
+
+
+def sahm_gap(monthly_unemployment: list[float]) -> float | None:
+    """Sahm recession gap: current 3-month average unemployment minus the minimum of that
+    same 3-month average over the trailing 12 months. ≥ 0.50 p.p. has historically marked the
+    start of a US recession. Needs at least 4 monthly points (oldest→newest)."""
+    if len(monthly_unemployment) < 4:
+        return None
+    ma3 = [
+        sum(monthly_unemployment[i - 2 : i + 1]) / 3 for i in range(2, len(monthly_unemployment))
+    ]
+    if not ma3:
+        return None
+    return ma3[-1] - min(ma3[-12:])
+
+
+def recession_probit(spread_10y_3m: float) -> float:
+    """12-month-ahead US recession probability from the Treasury term spread (Estrella-Mishkin
+    probit used by the NY Fed): P = Φ(-0.5333 - 0.6330 × spread), spread in percentage points."""
+    return normal_cdf(-0.5333 - 0.6330 * spread_10y_3m)
+
+
 def _q(value: float | None, places: int) -> Decimal | None:
     if value is None:
         return None

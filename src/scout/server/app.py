@@ -560,9 +560,14 @@ async def treasury_data() -> dict:
 async def macro_context(as_of: str | None = None) -> dict:
     """Key US macro indicators (from FRED): policy rate, the yield curve, jobs, inflation, vol.
 
-    Returns the latest value and date of each series — Fed Funds rate, 10Y & 2Y Treasury yields,
-    the 10Y-2Y spread, unemployment, CPI (index) and the VIX. Pass `as_of` (YYYY-MM-DD) for a
-    point-in-time read. Raw levels, not a regime call — you interpret risk-on/off from the numbers.
+    Returns the latest value and date of each series — Fed Funds rate, 10Y / 3M / 2Y Treasury
+    yields, the 10Y-2Y spread, unemployment, CPI (index) and the VIX — plus a `derived` block
+    that turns those raw series into regime numbers: CPI inflation YoY (and 3m annualized),
+    real Fed-funds & real 10y (ex-post), the Sahm recession gap (+ signal), the VIX z-score &
+    percentile vs its ~1y window, yield-curve inversion (+ how long), and a 12-month recession
+    probability (NY-Fed term-spread probit). A bare CPI index level says nothing alone — the
+    derived block is what's usable. Pass `as_of` (YYYY-MM-DD) for a point-in-time read. Numbers
+    and explicit measures, not a regime verdict — you still read risk-on/off from them.
     """
     svc = services()
     if svc.macro is None:

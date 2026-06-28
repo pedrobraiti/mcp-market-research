@@ -13,16 +13,22 @@ from scout.analytics import (
     max_drawdown_duration,
     momentum,
     momentum_12_1,
+    normal_cdf,
     pct_returns,
     pearson,
+    percentile_of_last,
     realized_volatility,
+    recession_probit,
     rogers_satchell_volatility,
     rsi,
+    sahm_gap,
     sharpe_ratio,
     skewness,
     sma,
     sortino_ratio,
+    trailing_negative_run,
     yang_zhang_volatility,
+    zscore_of_last,
 )
 from scout.domain.models import PriceBar, PriceHistory
 
@@ -135,6 +141,40 @@ def test_momentum_horizons():
     assert abs(momentum(closes, 2) - (10.0 / 8.0 - 1)) < 1e-9
     assert momentum(closes, 20) is None  # lookback exceeds series
     assert momentum_12_1([1.0, 2.0, 3.0]) is None  # needs > 252 bars
+
+
+def test_normal_cdf_known_points():
+    assert abs(normal_cdf(0.0) - 0.5) < 1e-12
+    assert abs(normal_cdf(1.96) - 0.975) < 1e-3
+    assert abs(normal_cdf(-1.96) - 0.025) < 1e-3
+
+
+def test_zscore_and_percentile_of_last():
+    values = [10.0] * 9 + [20.0]  # last value is an outlier high
+    z = zscore_of_last(values)
+    assert z is not None and z > 2
+    assert percentile_of_last(values) == 1.0  # last is >= everything
+    assert zscore_of_last([5.0]) is None  # too short
+
+
+def test_trailing_negative_run():
+    assert trailing_negative_run([0.3, 0.1, -0.05, -0.1, -0.2]) == 3
+    assert trailing_negative_run([0.3, 0.2, 0.1]) == 0
+    assert trailing_negative_run([-0.1, -0.2]) == 2
+
+
+def test_sahm_gap_rising_unemployment():
+    rising = [3.5, 3.5, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0, 4.1, 4.2, 4.3, 4.4]
+    gap = sahm_gap(rising)
+    assert gap is not None and gap > 0.5  # clears the recession threshold
+    assert sahm_gap([4.0, 4.0, 4.0]) is None  # needs at least 4 months
+
+
+def test_recession_probit_monotonic_and_bounded():
+    inverted = recession_probit(-1.0)  # inverted curve → higher recession odds
+    steep = recession_probit(2.5)  # steep curve → low odds
+    assert 0.0 < steep < inverted < 1.0
+    assert recession_probit(0.0) == normal_cdf(-0.5333)
 
 
 def _ramp_history(n: int) -> PriceHistory:

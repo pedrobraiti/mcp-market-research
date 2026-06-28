@@ -329,10 +329,33 @@ class MacroIndicator(BaseModel):
     )
 
 
+class MacroDerived(BaseModel):
+    """Regime numbers computed from the FRED series the snapshot already fetched — the raw
+    levels turned into something interpretable (a CPI index of 322 means nothing alone; its
+    YoY does). Measures, not a verdict: it reports a recession probability, never "go to cash".
+    Each field is null when its series is missing or too short; `notes` carries any caveat.
+    """
+
+    cpi_yoy: Decimal | None = None  # CPI inflation, year-over-year, in %
+    cpi_3m_annualized: Decimal | None = None  # 3-month CPI change, annualized, in % (momentum)
+    real_fed_funds: Decimal | None = None  # FEDFUNDS − cpi_yoy (ex-post real policy rate, p.p.)
+    real_10y: Decimal | None = None  # DGS10 − cpi_yoy (ex-post real 10y yield, p.p.)
+    sahm_gap: Decimal | None = None  # Sahm rule gap in p.p.
+    sahm_recession_signal: bool | None = None  # True when sahm_gap ≥ 0.50
+    vix_zscore: Decimal | None = None  # VIX vs its ~1y window (volatility regime)
+    vix_percentile: Decimal | None = None  # VIX percentile within its ~1y window, in %
+    yield_curve_inverted: bool | None = None  # 10Y-2Y spread < 0
+    yield_curve_days_inverted: int | None = None  # consecutive recent observations inverted
+    recession_prob_12m: Decimal | None = None  # NY-Fed probit on the 10y-3m spread, in %
+    notes: list[str] = []
+
+
 class MacroSnapshot(BaseModel):
-    """A snapshot of key macro indicators (rates, spread, unemployment, CPI, VIX)."""
+    """A snapshot of key macro indicators (rates, spread, unemployment, CPI, VIX) plus a
+    `derived` block of regime metrics computed from the same series."""
 
     indicators: list[MacroIndicator] = []
+    derived: MacroDerived | None = None
     as_of: date | None = None
 
 

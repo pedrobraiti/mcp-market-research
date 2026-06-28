@@ -47,6 +47,13 @@ dates anchor the entries.
   aware: ratios annualize at 252 (equities) / 365 (crypto), surfaced via `annualization_factor`.
   Turns OHLCV the Scout already fetched — but previously reduced to the close — into decision-grade
   risk numbers. See ADR-006.
+- **Derived macro regime layer** on `macro_context`: the FRED adapter already downloaded each full
+  series and then kept only the last point — it now also returns a `derived` block computed from
+  those same series (no new sources beyond adding `DGS3MO`): **CPI inflation YoY** and 3-month
+  annualized (a raw CPI index level is meaningless alone), **real Fed-funds & real 10y** (ex-post),
+  the **Sahm recession gap** (+ signal), **VIX z-score & percentile** vs its ~1y window, **yield-curve
+  inversion** (+ consecutive observations inverted), and a **12-month recession probability** (NY-Fed
+  Estrella-Mishkin term-spread probit, via stdlib `math.erf`). Stays measures-not-verdicts. See ADR-007.
 - Resilience: retry/backoff on yfinance, and a transparent **stooq fallback** for price history so
   a yfinance failure doesn't lose data.
 - 145 offline tests; live-validated against every source.

@@ -97,3 +97,34 @@ auditable, and free to whoever calls the tool.
 - **Stateless-respecting.** Only metrics computable from a single on-demand price-history read are
   included. Metrics that need stored history (e.g. IV-rank from an implied-vol time series) were
   deliberately left out — they would break ADR-003.
+
+---
+
+## ADR-007 — Transform the FRED series instead of shipping raw index levels
+
+**Decision.** `macro_context` now returns a `derived` block alongside the raw indicators: CPI YoY
+& 3-month annualized, ex-post real Fed-funds & real 10y, the Sahm recession gap (+ signal), VIX
+z-score & percentile, yield-curve inversion (+ duration) and a 12-month recession probability
+(Estrella-Mishkin probit). One new series (`DGS3MO`) was added to feed the probit.
+
+**Why.** The FRED adapter was already downloading each series' *entire* CSV history and then
+throwing all but the last point away. A raw level is often useless on its own — a CPI index of
+`333.979` tells the agent nothing; `CPI YoY = 4.2%, 3m annualized 9.4% (reaccelerating)` is a
+decision. The history needed to compute it was already in hand and free; collapsing it to the
+latest point was the waste. Doing the transform here (not in the skill) means it is correct once
+and auditable, and the agent never has to re-derive YoY/real-rate/Sahm math from a level.
+
+**Choices that matter.**
+- **Same ADR-004 line.** It reports a recession probability and a Sahm gap; it never says "go to
+  cash". Measures, not a regime verdict.
+- **Honest about the proxy.** The NY-Fed probit is calibrated on the 10y-3m spread using
+  *monthly averages*; Scout feeds it the latest daily spread and says so in `notes`. Better an
+  explicit, slightly-approximate number with its caveat than silence.
+- **Guarded, never fabricated.** Each block needs its minimum history (e.g. ≥13 monthly CPI points
+  for YoY) or its field stays `null` — a short series yields nothing rather than a misleading number.
+- **Pure-Python, stdlib only.** The probit's normal CDF uses `math.erf`; no scipy. Generic stats
+  (z-score, percentile, Sahm, probit) live in `analytics.py`; only the date alignment lives in the
+  adapter. Stateless is preserved — everything is computed from a single on-demand read.
+- **Deferred (M2b), not pretended.** Breakeven inflation (`T10YIE`), ex-ante real yield (`DFII10`)
+  and the high-yield credit spread (`BAMLH0A0HYM2`) are high-value FRED series left for a follow-up
+  — they are new raw inputs more than transforms of existing data.
