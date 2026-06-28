@@ -221,9 +221,12 @@ turn raw circulating/total/max counts into a read on unlock overhang and issuanc
 - **Mayer is generic.** price/SMA-200 is reported for equities too (how far above/below the 200-day
   average); the bands (<0.8 accumulation, >2.4 euphoria) are BTC-calibrated, so the name documents
   intent while the number stays a plain measure (ADR-004).
-- **Deferred (M6b).** SSR (market cap ÷ stablecoin supply) and Mcap/TVL need cross-source joins;
-  on-chain valuation (MVRV/NVT/realized cap) needs node/Glassnode data the keyless sources don't
-  provide — not approximated.
+- **Partly followed up (M6b).** SSR (total mcap ÷ Σ stablecoins) and stablecoin dominance were added
+  to `crypto_macro` as a tool-layer join with the DefiLlama stablecoin total (the join is supplementary
+  — a DefiLlama failure leaves the ratios null, never sinks the macro read). Still out, deliberately:
+  Mcap/TVL per protocol (fragile token↔protocol name mapping), a circulating-supply fallback source
+  (rework for one field), and on-chain valuation (MVRV/NVT/realized cap — needs node/Glassnode data the
+  keyless sources don't provide). See the manager desk's nice-to-have-probably-not note.
 
 ---
 

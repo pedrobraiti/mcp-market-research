@@ -935,6 +935,9 @@ class CryptoMacro(BaseModel):
     defi_market_cap_usd: Decimal | None = None
     defi_dominance: Decimal | None = None
     active_cryptocurrencies: int | None = None
+    # Cross-source (joined with the DefiLlama stablecoin total) — "dry powder" read:
+    stablecoin_supply_ratio: Decimal | None = None  # total mcap / Σ stablecoins (low = much cash)
+    stablecoin_dominance: Decimal | None = None  # Σ stablecoins / total mcap (cash share of mkt)
 
 
 class CryptoCategory(BaseModel):

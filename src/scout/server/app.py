@@ -9,6 +9,7 @@ Scout never places orders and never persists state — that is by design (see CL
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -1084,17 +1085,42 @@ async def crypto_macro() -> dict:
     """Crypto-wide macro snapshot: total market cap, BTC/ETH dominance, DeFi share (CoinGecko).
 
     Returns total crypto market cap & 24h volume, the 24h market-cap change, BTC and ETH dominance,
-    and DeFi market cap/dominance — the regime backdrop (alt season vs BTC-dominant). Note:
-    CoinGecko's keyless tier rate-limits; a 429 returns an honest error. Raw levels, not a call.
+    and DeFi market cap/dominance — the regime backdrop (alt season vs BTC-dominant) — plus, joined
+    with the DefiLlama stablecoin total, the Stablecoin Supply Ratio (total mcap / Σ stablecoins;
+    low = lots of sidelined cash / "dry powder") and stablecoin dominance. Note: CoinGecko's keyless
+    tier rate-limits; a 429 returns an honest error. Raw levels, not a call.
     """
     svc = services()
     if svc.crypto_macro is None:
         return _err(ValueError("Crypto macro source is not configured."))
     try:
         result = await svc.crypto_macro.get_macro()
+        _attach_stablecoin_ratios(result, await _stablecoin_total(svc))
         return _ok(result.model_dump(mode="json"))
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
+
+
+async def _stablecoin_total(svc: Any) -> Decimal | None:
+    """Best-effort total stablecoin circulation (USD) for the SSR join. Supplementary: a failure
+    here (e.g. DefiLlama rate-limit) must never sink the macro read, so it returns None."""
+    if getattr(svc, "defi", None) is None:
+        return None
+    try:
+        return (await svc.defi.get_stablecoins()).total_circulating_usd
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _attach_stablecoin_ratios(macro: Any, stablecoin_total: Decimal | None) -> None:
+    mcap = macro.total_market_cap_usd
+    if mcap and mcap > 0 and stablecoin_total and stablecoin_total > 0:
+        macro.stablecoin_supply_ratio = (mcap / stablecoin_total).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        macro.stablecoin_dominance = (stablecoin_total / mcap).quantize(
+            Decimal("0.0001"), rounding=ROUND_HALF_UP
+        )
 
 
 @mcp.tool()

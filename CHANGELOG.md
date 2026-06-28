@@ -94,6 +94,10 @@ dates anchor the entries.
   null for uncapped assets (no max supply). The circulating-based ratios populate only when the
   source reports circulating supply (the free Coinpaprika tier currently returns it null for some
   assets — they degrade to null rather than erroring). See ADR-010.
+- **Stablecoin Supply Ratio & dominance** on `crypto_macro`: joined with the DefiLlama stablecoin
+  total — SSR (total mcap / Σ stablecoins; low = lots of sidelined "dry powder") and stablecoin
+  dominance (cash share of the market). The join is supplementary: a stablecoin-source failure leaves
+  the ratios null and never sinks the macro read. See ADR-010.
 - **Derived options layer** on `options_volatility`, from the chain already fetched (only ATM IV
   was used before): **iv_skew** (OTM put vs call IV over ATM — >0 = puts richer/fear), **put/call
   ratios** (volume & open interest), and the **volatility risk premium** — ATM IV minus trailing

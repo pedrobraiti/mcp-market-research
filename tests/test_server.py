@@ -7,6 +7,7 @@ from scout.config import Settings, get_settings
 from scout.domain.models import (
     AnalystView,
     CompanySnapshot,
+    CryptoMacro,
     DividendHistory,
     EarningsInfo,
     Filing,
@@ -222,3 +223,16 @@ def test_parse_as_of_handles_blank_and_value():
     assert app_module._parse_as_of(None) is None
     assert app_module._parse_as_of("  ") is None
     assert app_module._parse_as_of("2024-03-02") == date(2024, 3, 2)
+
+
+def test_attach_stablecoin_ratios_computes_ssr():
+    macro = CryptoMacro(total_market_cap_usd=Decimal("3000000000000"))
+    app_module._attach_stablecoin_ratios(macro, Decimal("250000000000"))
+    assert macro.stablecoin_supply_ratio == Decimal("12.00")  # 3T / 250B
+    assert macro.stablecoin_dominance == Decimal("0.0833")  # 250B / 3T
+
+    # A missing/zero stablecoin total leaves the ratios null (the join is supplementary).
+    untouched = CryptoMacro(total_market_cap_usd=Decimal("3000000000000"))
+    app_module._attach_stablecoin_ratios(untouched, None)
+    assert untouched.stablecoin_supply_ratio is None
+    assert untouched.stablecoin_dominance is None
