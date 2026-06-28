@@ -72,7 +72,10 @@ class WorldBankMacro:
                 indicators.append(await self._one(clean_country, code, name))
             except Exception:  # noqa: BLE001 — skip an indicator that fails, keep the rest
                 continue
-        return WorldBankData(country=clean_country, indicators=indicators)
+        # Some requested indicators were dropped → the set is thinner than asked for; flag it so
+        # the caller doesn't read a missing indicator as "this country has no such data".
+        partial = len(indicators) < len(targets)
+        return WorldBankData(country=clean_country, indicators=indicators, partial=partial)
 
     async def _one(self, country: str, code: str, fallback_name: str) -> WorldBankIndicator:
         data = await self._fetch_json(_URL.format(country=country, code=code))

@@ -261,3 +261,38 @@ keeps the agent from re-deriving them.
   extra best-effort chain fetch at a longer expiry — a failure there (e.g. a 429) degrades to a null
   slope and never sinks the near read. Still out: earnings-driven IV crush and probability-of-ITM/
   touch (the latter needs a target strike to mean anything) — left until there's a clear use.
+
+---
+
+## ADR-012 — A failed source must never look like valid data
+
+**Decision.** Standardize one failure signal across the adapters: a source that can't be reached
+emits a machine-readable `unavailable: <reason>` (`rate_limited` / `timeout` / `error`) — via
+`SourceUnavailable` on a raised path, a `status`/`source_status` field on a model, a `not_found`
+vs `unavailable: …` split on per-symbol batch notes, or a `partial` flag when a sub-leg is dropped.
+A throttle or timeout must surface as "couldn't fetch", never as a real reading (an all-null
+snapshot, a `None`, an empty list, a thin-but-complete-looking result).
+
+**Why.** This is the failure class that actually loses money for an autonomous loop: a 429 read as
+"market cap = 0 / no news / unknown symbol" is a confident wrong input, not a visible gap. Honesty
+over filling (the project constitution): the loop can retry or abstain on `unavailable`, but only if
+it can tell that apart from a genuine `not_found`. It extends the pattern FRED/GDELT already had
+(`MacroIndicator.status`, `WebNewsSearch.source_status`, `adapters/retry.py`) to the rest.
+
+**Choices that matter.**
+- **`crypto_macro` raises on a total 429** (both CoinGecko legs down) instead of returning an
+  all-null `CryptoMacro` — matching its own docstring ("a 429 returns an honest error"); a single
+  failed headline leg is flagged via `status` rather than dropped.
+- **Retry only what's transient.** yfinance (sync) and CCXT now reuse `classify_transient`: 429/5xx/
+  timeout are retried then raised as `SourceUnavailable`; a genuine 404/parse error is re-raised
+  immediately (no retry storm) and stays an honest error.
+- **One shared, rate-limited CCXT exchange per process** (markets loaded once) replaces the
+  build-new-per-call pattern, so `enableRateLimit` throttles across a parallel manager fan-out
+  instead of resetting its token bucket every call and drawing mass-429s. The instance is
+  process-lifetime by design (warm pool); a failed first build isn't cached.
+- **Live equity snapshot carries `quote_time` + `market_state`** so a stale weekend close ≠ a live
+  tick (crypto already had `CryptoQuote.timestamp`).
+- **`partial` over silent-thin.** `crypto_derivatives` / `treasury_data` / `world_macro` flag a
+  dropped sub-leg rather than returning a complete-looking subset.
+- **Safety = preventing failures, not limiting the user.** None of this blocks a deliberate choice;
+  it only stops a data-source failure from masquerading as a fact.

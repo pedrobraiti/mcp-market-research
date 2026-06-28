@@ -21,6 +21,8 @@ _INFO = {
     "fiftyTwoWeekLow": 164.0,
     "sector": "Technology",
     "industry": "Consumer Electronics",
+    "regularMarketTime": 1_718_000_000,  # unix; live-quote freshness stamp
+    "marketState": "REGULAR",
     "recommendationKey": "buy",
     "recommendationMean": 2.1,
     "numberOfAnalystOpinions": 35,
@@ -148,6 +150,19 @@ class EmptyTicker:
         return pd.DataFrame()
 
 
+class _Resp:
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+
+
+class _RateLimited(Exception):
+    """A 429-shaped error (carries .response.status_code) — classified as a transient failure."""
+
+    def __init__(self) -> None:
+        self.response = _Resp(429)
+        super().__init__("HTTP 429")
+
+
 class FlakyTicker:
     """Raises on `.info` the first ``fail_times`` accesses, then succeeds — to test retry."""
 
@@ -162,8 +177,22 @@ class FlakyTicker:
     def info(self):
         FlakyTicker.accesses["n"] += 1
         if FlakyTicker.accesses["n"] <= FlakyTicker.fail_times:
-            raise RuntimeError("rate limited")
+            raise _RateLimited()
         return _INFO
+
+
+class BrokenTicker:
+    """Always raises a NON-transient error on `.info` — must NOT be retried."""
+
+    accesses = {"n": 0}
+
+    def __init__(self, symbol: str) -> None:
+        self.symbol = symbol
+
+    @property
+    def info(self):
+        BrokenTicker.accesses["n"] += 1
+        raise ValueError("genuine parse bug")
 
 
 def _source():
@@ -182,6 +211,10 @@ async def test_snapshot_parses_price_and_multiples():
     assert snapshot.market_cap == Decimal("3500000000000")
     assert snapshot.sector == "Technology"
     assert snapshot.as_of is None
+    # Live path carries a freshness stamp so a stale weekend close ≠ a live tick.
+    assert snapshot.market_state == "REGULAR"
+    assert snapshot.quote_time is not None
+    assert snapshot.quote_time.year == 2024
 
 
 async def test_snapshot_with_as_of_uses_history_close():
@@ -190,6 +223,9 @@ async def test_snapshot_with_as_of_uses_history_close():
     assert snapshot.price == Decimal("223.5")
     assert snapshot.previous_close == Decimal("221.0")
     assert snapshot.as_of == date(2024, 6, 11)
+    # Historical reads have no live freshness stamp.
+    assert snapshot.quote_time is None
+    assert snapshot.market_state is None
 
 
 async def test_snapshot_surfaces_only_recent_splits_newest_first():
@@ -647,9 +683,22 @@ async def test_retry_recovers_from_transient_failure():
     assert FlakyTicker.accesses["n"] == 3  # failed twice, succeeded on the third
 
 
-async def test_retry_gives_up_and_raises_after_exhaustion():
+async def test_retry_gives_up_and_raises_source_unavailable_after_exhaustion():
+    from scout.adapters.retry import SourceUnavailable
+
     FlakyTicker.accesses["n"] = 0
     FlakyTicker.fail_times = 99
     source = YFinanceMarketData(ticker_factory=FlakyTicker, retry_attempts=2, retry_base_delay=0)
-    with pytest.raises(RuntimeError, match="rate limited"):
+    with pytest.raises(SourceUnavailable) as exc_info:
         await source.get_snapshot("AAPL")
+    assert exc_info.value.reason == "rate_limited"
+    assert FlakyTicker.accesses["n"] == 2  # exactly retry_attempts, no more
+
+
+async def test_retry_reraises_non_transient_immediately():
+    """A genuine (non-429/timeout) error must not trigger a retry storm — re-raised at once."""
+    BrokenTicker.accesses["n"] = 0
+    source = YFinanceMarketData(ticker_factory=BrokenTicker, retry_attempts=3, retry_base_delay=0)
+    with pytest.raises(ValueError, match="genuine parse bug"):
+        await source.get_snapshot("AAPL")
+    assert BrokenTicker.accesses["n"] == 1  # not retried

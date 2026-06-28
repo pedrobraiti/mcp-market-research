@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from scout.adapters.ccxt import CcxtMarketData, normalize_pair
+from scout.adapters.retry import SourceUnavailable
 
 
 def _ms(year: int, month: int, day: int) -> int:
@@ -165,3 +166,65 @@ async def test_order_book_imbalance_and_microprice_asymmetric():
     assert book.imbalance == Decimal("0.6667")  # (10 − 2) / 12 → strong bid-side pressure
     # microprice leans toward the thin ask: (100*1 + 101*8)/(8+1) = 908/9 ≈ 100.889 > mid 100.5
     assert book.microprice == Decimal("100.88888889")
+
+
+# --- Shared, rate-limited exchange instance + transient retry (default fetch path) ----------
+
+
+class _Resp:
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+
+
+class _Rate429(Exception):
+    def __init__(self) -> None:
+        self.response = _Resp(429)
+        super().__init__("HTTP 429")
+
+
+class _FakeExchange:
+    """Stands in for a ccxt async exchange. Counts builds/loads/calls so the test can prove the
+    instance is reused (one build, one load_markets) and that 429s are retried, not multiplied."""
+
+    def __init__(self, fail_first: int = 0) -> None:
+        self.markets_loaded = 0
+        self.ticker_calls = 0
+        self.closed = 0
+        self._fail_first = fail_first
+
+    async def load_markets(self):
+        self.markets_loaded += 1
+        return {}
+
+    async def fetch_ticker(self, symbol: str) -> dict:
+        self.ticker_calls += 1
+        if self.ticker_calls <= self._fail_first:
+            raise _Rate429()
+        return dict(_TICKER)
+
+    async def close(self):
+        self.closed += 1
+
+
+async def test_shared_exchange_built_once_and_retries_transient():
+    fake = _FakeExchange(fail_first=2)  # first two ticker calls 429, third succeeds
+    source = CcxtMarketData(retry_attempts=3, retry_base_delay=0)
+    source._build_exchange = lambda: fake  # bypass the real ccxt import
+
+    first = await source.get_quote("BTC")
+    second = await source.get_quote("BTC")
+
+    assert first is not None and first.last == Decimal("67005.0")
+    assert second is not None  # second call reuses the instance, no 429 left
+    assert fake.markets_loaded == 1  # markets loaded exactly once (shared instance)
+    assert fake.ticker_calls == 4  # 2 failed + 1 recovered on call one, 1 clean on call two
+
+
+async def test_shared_exchange_raises_source_unavailable_on_persistent_429():
+    fake = _FakeExchange(fail_first=99)
+    source = CcxtMarketData(retry_attempts=2, retry_base_delay=0)
+    source._build_exchange = lambda: fake
+
+    with pytest.raises(SourceUnavailable) as exc_info:
+        await source.get_quote("BTC")
+    assert exc_info.value.reason == "rate_limited"

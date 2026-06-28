@@ -20,6 +20,7 @@ from ..domain.models import (
     NewsDigest,
 )
 from ..domain.ports import MarketDataSource
+from .notes import unavailable_or_not_found
 
 _EPOCH = datetime(1970, 1, 1)
 
@@ -38,7 +39,9 @@ async def build_classification(
     items: list[ClassificationItem] = []
     for symbol, snap in zip(clean, snapshots, strict=False):
         if isinstance(snap, Exception) or snap is None:
-            items.append(ClassificationItem(symbol=symbol, note="unavailable"))
+            items.append(
+                ClassificationItem(symbol=symbol, note=unavailable_or_not_found(snap))
+            )
             continue
         items.append(
             ClassificationItem(

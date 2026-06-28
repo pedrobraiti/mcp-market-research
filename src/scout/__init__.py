@@ -5,4 +5,4 @@ consolidated data. It never places orders and never persists user state — same
 same world. Decisions and memory live in the calling agent / strategy skill.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.4.0"

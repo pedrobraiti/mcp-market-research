@@ -16,6 +16,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from ...domain.models import CryptoCategory, CryptoMacro, CryptoSectors
+from ..retry import SourceUnavailable, classify_transient, unavailable_status
 
 _GLOBAL = "https://api.coingecko.com/api/v3/global"
 _GLOBAL_DEFI = "https://api.coingecko.com/api/v3/global/decentralized_finance_defi"
@@ -61,6 +62,15 @@ class CoinGeckoMacro:
             self._fetch_json(_GLOBAL_DEFI),
             return_exceptions=True,
         )
+        # A keyless 429 (or timeout) typically throttles the whole IP, so BOTH legs fail. An
+        # all-null CryptoMacro would read as "market cap unknown = a real zero". It is not —
+        # it is "couldn't fetch". Raise so the tool surfaces an honest error envelope instead
+        # (a transient failure → SourceUnavailable with a reason; a genuine error propagates raw).
+        if not isinstance(glob, dict) and not isinstance(defi, dict):
+            reason = classify_transient(glob) or classify_transient(defi)
+            if reason is not None:
+                raise SourceUnavailable(reason) from glob
+            raise glob
         macro = CryptoMacro()
         if isinstance(glob, dict):
             data = glob.get("data") or {}
@@ -75,6 +85,10 @@ class CoinGeckoMacro:
             macro.btc_dominance = _dec(dominance.get("btc"))
             macro.eth_dominance = _dec(dominance.get("eth"))
             macro.active_cryptocurrencies = _int(data.get("active_cryptocurrencies"))
+        else:
+            # The headline leg failed but DeFi came back: flag it so the null market cap /
+            # dominance read as "unavailable", not as real zeros.
+            macro.status = unavailable_status(glob)
         if isinstance(defi, dict):
             ddata = defi.get("data") or {}
             macro.defi_market_cap_usd = _dec(ddata.get("defi_market_cap"))

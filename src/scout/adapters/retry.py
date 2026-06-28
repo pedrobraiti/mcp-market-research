@@ -23,6 +23,7 @@ from typing import Any
 
 RATE_LIMITED = "rate_limited"
 TIMEOUT = "timeout"
+ERROR = "error"  # a genuine, non-transient failure (bad payload, 404…) on an unavailable path
 
 # 429 plus the transient-overload 5xx family — all worth backing off and retrying.
 _RETRYABLE_STATUS = {429, 502, 503, 504}
@@ -50,6 +51,16 @@ def classify_transient(exc: Exception) -> str | None:
     if "timeout" in type(exc).__name__.lower():
         return TIMEOUT
     return None
+
+
+def unavailable_status(exc: Exception) -> str:
+    """A ready ``unavailable: <reason>`` label for any exception, so a caller that catches a
+    failure can attach a machine-readable reason instead of a bare 'unavailable'. Uses the
+    transient reason when it can be classified (``rate_limited`` / ``timeout``); a
+    ``SourceUnavailable`` already carries its own; anything else is a genuine ``error``."""
+    if isinstance(exc, SourceUnavailable):
+        return exc.status
+    return f"unavailable: {classify_transient(exc) or ERROR}"
 
 
 async def with_retry[T](

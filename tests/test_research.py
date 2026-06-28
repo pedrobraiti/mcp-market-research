@@ -91,7 +91,7 @@ async def test_comparison_builds_rows_in_parallel():
 
 async def test_comparison_notes_missing_symbol():
     result = await build_comparison(FakeSource(), ["nope"])
-    assert result.rows[0].note == "data unavailable"
+    assert result.rows[0].note == "not_found"  # genuine None, not a transient failure
 
 
 async def test_correlation_matrix_perfect_and_diagonal():
@@ -150,7 +150,29 @@ async def test_classification_in_batch():
     result = await build_classification(source, ["aapl", "zzz"])
     by_symbol = {i.symbol: i for i in result.items}
     assert by_symbol["AAPL"].sector == "Tech"
-    assert by_symbol["ZZZ"].note == "unavailable"
+    assert by_symbol["ZZZ"].note == "not_found"  # genuine None → not a fetch failure
+
+
+class _Resp:
+    def __init__(self, status_code):
+        self.status_code = status_code
+
+
+class _RateLimited(Exception):
+    def __init__(self):
+        self.response = _Resp(429)
+        super().__init__("HTTP 429")
+
+
+class _ThrottledSource(FakeSource):
+    async def get_snapshot(self, symbol, as_of=None):
+        raise _RateLimited()
+
+
+async def test_classification_distinguishes_rate_limit_from_not_found():
+    """A 429 must read as 'unavailable: rate_limited' (retry/abstain), NOT as not_found."""
+    result = await build_classification(_ThrottledSource(), ["aaa"])
+    assert result.items[0].note == "unavailable: rate_limited"
 
 
 async def test_news_digest_merges_and_sorts():

@@ -45,6 +45,18 @@ async def test_world_bank_picks_latest_non_null():
     indicator = data.indicators[0]
     assert indicator.value == Decimal("2.8")
     assert indicator.year == 2024  # skipped the null 2025 observation
+    assert data.partial is False  # the one requested indicator came back
+
+
+async def test_world_bank_flags_partial_when_an_indicator_fails():
+    async def _fetch(url: str):
+        if "GOOD" in url:
+            return _wb_response("GOOD", 5, "2024")
+        raise RuntimeError("world bank throttled")
+
+    data = await WorldBankMacro(fetch_json=_fetch).get_indicators("usa", codes=["GOOD", "BAD"])
+    assert len(data.indicators) == 1  # BAD dropped
+    assert data.partial is True
 
 
 # ---- Treasury ------------------------------------------------------------------------
@@ -78,3 +90,14 @@ async def test_treasury_debt_and_latest_rates():
     rate_figures = [f for f in data.figures if f.unit == "%"]
     assert len(rate_figures) == 2
     assert by_name["Avg interest rate — Treasury Bills"].value == Decimal("4.5")
+    assert data.partial is False  # both legs returned
+
+
+async def test_treasury_flags_partial_when_a_leg_fails():
+    async def _fetch(url: str) -> dict:
+        if "debt_to_penny" in url:
+            return {"data": [{"record_date": "2026-06-24", "tot_pub_debt_out_amt": "36e12"}]}
+        raise RuntimeError("rates endpoint down")
+
+    data = await TreasuryFiscal(fetch_json=_fetch).get_data()
+    assert data.partial is True  # the average-rates leg was dropped

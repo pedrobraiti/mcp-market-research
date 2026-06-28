@@ -12,6 +12,7 @@ fully offline, with no network and no ccxt import.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -26,6 +27,7 @@ from ...domain.models import (
     CryptoQuote,
     OrderBookLevel,
 )
+from ..retry import with_retry
 
 TickerFetch = Callable[[str], Awaitable[dict]]
 OhlcvFetch = Callable[[str, str, int], Awaitable[list]]
@@ -79,16 +81,23 @@ class CcxtMarketData:
         fetch_tickers: TickersFetch | None = None,
         fetch_order_book: OrderBookFetch | None = None,
         timeout: float = 15.0,
+        retry_attempts: int = 3,
+        retry_base_delay: float = 0.5,
     ) -> None:
         self._exchange = exchange
         self._quote_ccy = quote_ccy
         self._timeout = timeout
+        self._retry_attempts = retry_attempts
+        self._retry_base_delay = retry_base_delay
         self._fetch_ticker = fetch_ticker or self._default_fetch_ticker
         self._fetch_ohlcv = fetch_ohlcv or self._default_fetch_ohlcv
         self._fetch_tickers = fetch_tickers or self._default_fetch_tickers
         self._fetch_order_book = fetch_order_book or self._default_fetch_order_book
+        # One lazily-built exchange shared for the whole process (see _shared_exchange).
+        self._exchange_instance: Any | None = None
+        self._exchange_lock = asyncio.Lock()
 
-    def _new_exchange(self):
+    def _build_exchange(self) -> Any:
         import ccxt.async_support as ccxt  # lazy import: tests inject and never hit this
 
         if not hasattr(ccxt, self._exchange):
@@ -97,33 +106,52 @@ class CcxtMarketData:
             {"enableRateLimit": True, "timeout": int(self._timeout * 1000)}
         )
 
+    async def _shared_exchange(self) -> Any:
+        """One lazily-built, rate-limited exchange instance per process, markets loaded once.
+
+        Building a NEW instance per call (the old pattern) reset ccxt's ``enableRateLimit``
+        token bucket every time, so a manager-mode fan-out hitting several crypto tools in
+        parallel sailed past the throttle and drew mass-429s. Sharing the instance lets the
+        limiter pace requests ACROSS calls — the 24/7 crypto loop is the most frequent caller,
+        so this is where it matters most. The instance lives for the process lifetime by design
+        (its connection pool stays warm); a failed first build is not cached, so it is retried.
+        """
+        if self._exchange_instance is None:
+            async with self._exchange_lock:
+                if self._exchange_instance is None:
+                    exchange = self._build_exchange()
+                    try:
+                        await self._retrying(exchange.load_markets)
+                    except Exception:
+                        await exchange.close()
+                        raise
+                    self._exchange_instance = exchange
+        return self._exchange_instance
+
+    async def _retrying[T](self, operation: Callable[[], Awaitable[T]]) -> T:
+        """Wrap a raw exchange call in transient retry → ``SourceUnavailable`` on exhaustion, so a
+        429/timeout surfaces as an honest 'couldn't fetch' instead of a silent empty/None."""
+        return await with_retry(
+            operation, attempts=self._retry_attempts, base_delay=self._retry_base_delay
+        )
+
     async def _default_fetch_ticker(self, symbol: str) -> dict:
-        ex = self._new_exchange()
-        try:
-            return await ex.fetch_ticker(symbol)
-        finally:
-            await ex.close()
+        ex = await self._shared_exchange()
+        return await self._retrying(lambda: ex.fetch_ticker(symbol))
 
     async def _default_fetch_ohlcv(self, symbol: str, timeframe: str, limit: int) -> list:
-        ex = self._new_exchange()
-        try:
-            return await ex.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-        finally:
-            await ex.close()
+        ex = await self._shared_exchange()
+        return await self._retrying(
+            lambda: ex.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+        )
 
     async def _default_fetch_tickers(self) -> dict:
-        ex = self._new_exchange()
-        try:
-            return await ex.fetch_tickers()
-        finally:
-            await ex.close()
+        ex = await self._shared_exchange()
+        return await self._retrying(ex.fetch_tickers)
 
     async def _default_fetch_order_book(self, symbol: str, limit: int) -> dict:
-        ex = self._new_exchange()
-        try:
-            return await ex.fetch_order_book(symbol, limit=limit)
-        finally:
-            await ex.close()
+        ex = await self._shared_exchange()
+        return await self._retrying(lambda: ex.fetch_order_book(symbol, limit=limit))
 
     async def get_quote(self, symbol: str) -> CryptoQuote | None:
         pair, base, quote = normalize_pair(symbol, self._quote_ccy)

@@ -79,6 +79,18 @@ class CompanySnapshot(BaseModel):
     fifty_two_week_low: Decimal | None = None
     sector: str | None = None
     industry: str | None = None
+    quote_time: datetime | None = Field(
+        default=None,
+        description=(
+            "Source timestamp of the live quote (yfinance regularMarketTime). Lets a robot tell a "
+            "true real-time price from a stale weekend/holiday last-session close — both otherwise "
+            "look identical on the live (as_of=None) path. None on a historical (as_of) read."
+        ),
+    )
+    market_state: str | None = Field(
+        default=None,
+        description="Market session for the live quote (e.g. REGULAR, CLOSED, PRE, POST).",
+    )
     recent_splits: list[StockSplit] = Field(
         default_factory=list,
         description=(
@@ -611,6 +623,11 @@ class WorldBankData(BaseModel):
 
     country: str
     indicators: list[WorldBankIndicator] = []
+    partial: bool = Field(
+        default=False,
+        description="True when one or more requested indicators were dropped (fetch failed) — "
+        "the list is thinner than asked for, not the country's full set.",
+    )
 
 
 class TreasuryFigure(BaseModel):
@@ -624,6 +641,11 @@ class TreasuryData(BaseModel):
     """Official US Treasury fiscal data (debt, average interest rates) — keyless, authoritative."""
 
     figures: list[TreasuryFigure] = []
+    partial: bool = Field(
+        default=False,
+        description="True when a leg (debt or average-rates) was dropped — the figures are "
+        "incomplete, not the full set.",
+    )
 
 
 class PageviewDay(BaseModel):
@@ -853,6 +875,11 @@ class CryptoDerivatives(BaseModel):
     funding_annualized_oi_weighted: Decimal | None = None  # the same, annualized (8h assumption)
     funding_dispersion: Decimal | None = None  # max − min funding across venues (stress/arb signal)
     total_open_interest_value: Decimal | None = None  # Σ OI in USD across venues
+    partial: bool = Field(
+        default=False,
+        description="True when at least one venue was dropped — the cross-venue aggregates are "
+        "computed over fewer exchanges than attempted, so read them as a thinner picture.",
+    )
     note: str | None = None
 
 
@@ -942,6 +969,14 @@ class CryptoMacro(BaseModel):
     # Cross-source (joined with the DefiLlama stablecoin total) — "dry powder" read:
     stablecoin_supply_ratio: Decimal | None = None  # total mcap / Σ stablecoins (low = much cash)
     stablecoin_dominance: Decimal | None = None  # Σ stablecoins / total mcap (cash share of mkt)
+    status: str | None = Field(
+        default=None,
+        description=(
+            "Set when the core CoinGecko leg couldn't be fetched (e.g. 'unavailable: "
+            "rate_limited') — so an all-null snapshot from a 429 is distinguishable from real "
+            "zeros. None means the headline market-cap/dominance figures were fetched OK."
+        ),
+    )
 
 
 class CryptoCategory(BaseModel):

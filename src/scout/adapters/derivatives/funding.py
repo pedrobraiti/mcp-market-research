@@ -104,6 +104,9 @@ class DerivativesAggregator:
             return CryptoDerivatives(
                 base=token, note="No derivatives venue returned data for this asset."
             )
+        # Fewer venues back than attempted → the cross-venue aggregates are thinner; flag it so a
+        # 1-of-3 consensus isn't read as the whole market.
+        partial = len(venues) < len(results)
         oi_weighted, dispersion, total_oi = _aggregate_funding(venues)
         return CryptoDerivatives(
             base=token,
@@ -112,6 +115,7 @@ class DerivativesAggregator:
             funding_annualized_oi_weighted=_annualize_funding(oi_weighted),
             funding_dispersion=_quantize(dispersion, 8),
             total_open_interest_value=_quantize(total_oi, 2),
+            partial=partial,
             note="funding_*_annualized assume an 8h funding interval (Binance/Bybit/OKX default).",
         )
 

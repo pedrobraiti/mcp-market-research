@@ -30,6 +30,7 @@ from ..domain.ports import (
     CryptoOnChainSource,
     CryptoSentimentSource,
 )
+from .notes import unavailable_or_not_found
 
 
 def _q(value: float | None, places: int) -> Decimal | None:
@@ -50,10 +51,14 @@ async def build_crypto_comparison(
         quote, profile = await asyncio.gather(
             market.get_quote(symbol), assets.get_profile(base), return_exceptions=True
         )
-        quote = quote if not isinstance(quote, Exception) else None
-        profile = profile if not isinstance(profile, Exception) else None
-        if quote is None and profile is None:
-            return CryptoComparisonRow(symbol=symbol, base=base, note="data unavailable")
+        quote_val = quote if not isinstance(quote, Exception) else None
+        profile_val = profile if not isinstance(profile, Exception) else None
+        if quote_val is None and profile_val is None:
+            failure = next((r for r in (quote, profile) if isinstance(r, Exception)), None)
+            return CryptoComparisonRow(
+                symbol=symbol, base=base, note=unavailable_or_not_found(failure)
+            )
+        quote, profile = quote_val, profile_val
         return CryptoComparisonRow(
             symbol=quote.symbol if quote else symbol,
             base=base,

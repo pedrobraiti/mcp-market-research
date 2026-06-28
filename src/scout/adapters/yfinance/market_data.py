@@ -45,6 +45,7 @@ from ...domain.models import (
     SymbolMatch,
     SymbolSearch,
 )
+from ..retry import RATE_LIMITED, SourceUnavailable, classify_transient
 
 # A revenue/gross-profit/etc. line item is looked up by trying several label spellings,
 # since yfinance's row labels drift between versions and filings.
@@ -287,23 +288,30 @@ class YFinanceMarketData:
         )
 
     def _retrying(self, func: Callable[..., Any], *args: Any) -> Any:
-        """Call a blocking fetch, retrying transient failures with exponential backoff.
+        """Call a blocking fetch, retrying only TRANSIENT failures with exponential backoff.
 
-        yfinance scrapes Yahoo and is rate-limited; a transient error should NOT look like a
-        missing symbol. So a network/HTTP failure is retried, and only a persistent failure
-        propagates (surfaced as an error envelope) — a genuinely unresolved symbol still
-        returns ``None`` without raising.
+        yfinance scrapes Yahoo and is rate-limited; a transient error (429/5xx/timeout) should
+        NOT look like a missing symbol, so it is retried and, once exhausted, raised as
+        ``SourceUnavailable`` (a machine-readable 'couldn't fetch', not 'fetched, empty'). A
+        NON-transient error (a 404, a parse/value bug) is re-raised immediately — retrying it
+        would be a pointless storm, and it stays an honest error. A genuinely unresolved symbol
+        still returns ``None`` without raising (the sync impls handle that).
         """
         last_error: Exception | None = None
+        last_reason: str | None = None
         for attempt in range(self._retry_attempts):
             try:
                 return func(*args)
-            except Exception as exc:  # noqa: BLE001
-                last_error = exc
+            except SourceUnavailable:
+                raise
+            except Exception as exc:  # noqa: BLE001 — classify, then retry-or-reraise
+                reason = classify_transient(exc)
+                if reason is None:
+                    raise
+                last_error, last_reason = exc, reason
                 if attempt < self._retry_attempts - 1 and self._retry_base_delay > 0:
                     time.sleep(self._retry_base_delay * (2**attempt))
-        assert last_error is not None
-        raise last_error
+        raise SourceUnavailable(last_reason or RATE_LIMITED) from last_error
 
     # ---- blocking implementations ----------------------------------------------------
 
@@ -348,6 +356,8 @@ class YFinanceMarketData:
             fifty_two_week_low=_dec(info.get("fiftyTwoWeekLow")),
             sector=info.get("sector"),
             industry=info.get("industry"),
+            quote_time=_from_unix(info.get("regularMarketTime")),
+            market_state=info.get("marketState"),
             recent_splits=_recent_splits(ticker, None),
             as_of=None,
         )

@@ -6,6 +6,8 @@ dates anchor the entries.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-06-28
+
 ### Added
 - **Full crypto spot layer — 21 tools**, mirroring the equities side, all free & keyless. Symbols
   use the CCXT `BASE/QUOTE` format (e.g. `BTC/USDT`) so a researched asset maps to a tradable pair.
@@ -110,9 +112,30 @@ dates anchor the entries.
   (e.g. a 429) leaves the slope null and never sinks the near-expiry read. See ADR-011.
 - Resilience: retry/backoff on yfinance, and a transparent **stooq fallback** for price history so
   a yfinance failure doesn't lose data.
-- 145 offline tests; live-validated against every source.
+- **Freshness stamp on the live equity snapshot** (`company_snapshot`): `quote_time`
+  (`regularMarketTime`) and `market_state`, so a stale weekend/holiday last-session close is no
+  longer indistinguishable from a live tick (crypto already carried `CryptoQuote.timestamp`).
+- 191 offline tests; live-validated against every source.
 
 ### Fixed
+- **Data-honesty hardening — a failed source must never look like valid data.** A consistent,
+  machine-readable `unavailable: <reason>` (`rate_limited` / `timeout` / `error`) is now emitted on
+  the unavailable path so a caller can branch (retry vs abstain) on a code, not a guess:
+  - `crypto_macro` no longer returns an **all-null snapshot on a 429** (which read as real zeros): a
+    rate-limit/timeout that drops both CoinGecko legs now raises an honest error envelope (matching
+    its own docstring), and a single failed headline leg is flagged via a new `status` field.
+    See ADR-012.
+  - yfinance retry now **only retries transient failures** (429/5xx/timeout via `classify_transient`)
+    and re-raises a genuine error (404/parse bug) immediately — stopping a retry storm on permanent
+    errors — raising `SourceUnavailable` with a reason once exhausted.
+  - The **CCXT crypto layer holds one shared, rate-limited exchange instance** per process (markets
+    loaded once) instead of building a new one per call, so `enableRateLimit` throttles across a
+    parallel manager-mode fan-out instead of drawing mass-429s; fetches are wrapped in transient
+    retry emitting `SourceUnavailable`.
+  - `classify` / `compare` now distinguish a transient failure (`unavailable: rate_limited`) from a
+    genuinely unknown symbol (`not_found`), instead of collapsing both into `"unavailable"`.
+  - `crypto_derivatives`, `treasury_data` and `world_macro` carry a `partial` flag when a sub-leg is
+    dropped, so a complete-but-thin result isn't mistaken for the full picture.
 - `dividends`: `had_cut` no longer flags a spurious cut from the **incomplete current calendar
   year** (a partial year has fewer ex-dates, so its lower calendar-year total is a timing
   artifact, not a real cut). Surfaced while validating a real MU equity-research report.

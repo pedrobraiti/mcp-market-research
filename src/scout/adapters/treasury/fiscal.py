@@ -62,7 +62,9 @@ class TreasuryFiscal:
         )
         figures: list[TreasuryFigure] = []
 
-        debt_rows = (debt_data or {}).get("data") or [] if isinstance(debt_data, dict) else []
+        debt_ok = isinstance(debt_data, dict)
+        rates_ok = isinstance(rates_data, dict)
+        debt_rows = (debt_data or {}).get("data") or [] if debt_ok else []
         if debt_rows:
             row = debt_rows[0]
             figures.append(
@@ -74,7 +76,7 @@ class TreasuryFiscal:
                 )
             )
 
-        rate_rows = (rates_data or {}).get("data") or [] if isinstance(rates_data, dict) else []
+        rate_rows = (rates_data or {}).get("data") or [] if rates_ok else []
         if rate_rows:
             latest = rate_rows[0].get("record_date")
             for row in rate_rows:
@@ -88,4 +90,7 @@ class TreasuryFiscal:
                         record_date=_parse_date(latest),
                     )
                 )
-        return TreasuryData(figures=figures)
+        # A dropped leg (or a transient failure on one) leaves the figures incomplete — flag it
+        # so a thin list isn't mistaken for "this is all the Treasury reports".
+        partial = not (debt_ok and debt_rows and rates_ok and rate_rows)
+        return TreasuryData(figures=figures, partial=partial)

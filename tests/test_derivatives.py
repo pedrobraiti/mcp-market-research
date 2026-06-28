@@ -59,6 +59,7 @@ async def test_derived_funding_annualized_and_cross_venue():
     # Total OI in USD = 600,000,000 + 480,080,000 + 300,000,000.
     assert result.total_open_interest_value == Decimal("1380080000.00")
     assert result.note is not None and "8h" in result.note
+    assert result.partial is False  # all three venues returned
 
 
 async def test_partial_failure_drops_only_that_venue():
@@ -70,6 +71,7 @@ async def test_partial_failure_drops_only_that_venue():
     result = await DerivativesAggregator(fetch_json=flaky).get_derivatives("BTC")
     exchanges = {v.exchange for v in result.venues}
     assert exchanges == {"binance", "okx"}
+    assert result.partial is True  # a venue was dropped → aggregates are thinner
 
 
 async def test_all_fail_returns_note():

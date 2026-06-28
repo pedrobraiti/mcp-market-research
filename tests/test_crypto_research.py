@@ -90,7 +90,7 @@ async def test_compare_merges_quote_and_profile():
     rows = {r.base: r for r in result.items}
     assert rows["BTC"].last == Decimal("60000")
     assert rows["BTC"].rank == 1
-    assert rows["DOGE"].note == "data unavailable"  # no quote/profile
+    assert rows["DOGE"].note == "not_found"  # genuine None, not a transient fetch failure
 
 
 async def test_correlation_perfectly_correlated():

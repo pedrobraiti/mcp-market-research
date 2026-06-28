@@ -12,6 +12,7 @@ from datetime import date
 
 from ..domain.models import Comparison, ComparisonRow, Period
 from ..domain.ports import MarketDataSource
+from .notes import unavailable_or_not_found
 
 
 async def build_comparison(
@@ -28,7 +29,12 @@ async def build_comparison(
         snap = snapshot if not isinstance(snapshot, Exception) else None
         fund = fundamentals if not isinstance(fundamentals, Exception) else None
         if snap is None and fund is None:
-            return ComparisonRow(symbol=symbol, note="data unavailable")
+            # Prefer the transient signal: if EITHER leg failed transiently the row is
+            # "couldn't fetch" (retry/abstain); only a clean double-None is "not_found".
+            failure = next(
+                (r for r in (snapshot, fundamentals) if isinstance(r, Exception)), None
+            )
+            return ComparisonRow(symbol=symbol, note=unavailable_or_not_found(failure))
         return ComparisonRow(
             symbol=symbol,
             name=snap.name if snap else None,
