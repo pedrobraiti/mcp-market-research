@@ -977,6 +977,14 @@ class CryptoMacro(BaseModel):
             "zeros. None means the headline market-cap/dominance figures were fetched OK."
         ),
     )
+    defi_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when ONLY the DeFi leg failed (the headline is fine) — so a null "
+            "defi_market_cap_usd/defi_dominance reads as 'unavailable', not a real zero. "
+            "Scoped to the DeFi sub-fields; the headline figures above remain valid."
+        ),
+    )
 
 
 class CryptoCategory(BaseModel):

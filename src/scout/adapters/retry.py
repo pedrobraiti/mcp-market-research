@@ -46,9 +46,15 @@ def classify_transient(exc: Exception) -> str | None:
     """Return a retry reason for a transient HTTP failure, else ``None`` (do not retry)."""
     response = getattr(exc, "response", None)
     status_code = getattr(response, "status_code", None)
+    name = type(exc).__name__.lower()
     if status_code in _RETRYABLE_STATUS:
         return RATE_LIMITED
-    if "timeout" in type(exc).__name__.lower():
+    # Some clients raise their own throttle type with no httpx ``response`` (e.g. yfinance's
+    # YFRateLimitError) — the most common equity-source throttle. Match it by class name so it
+    # is backed off + labelled ``rate_limited`` instead of slipping through as a genuine error.
+    if "ratelimit" in name:
+        return RATE_LIMITED
+    if "timeout" in name:
         return TIMEOUT
     return None
 

@@ -93,6 +93,11 @@ class CoinGeckoMacro:
             ddata = defi.get("data") or {}
             macro.defi_market_cap_usd = _dec(ddata.get("defi_market_cap"))
             macro.defi_dominance = _dec(ddata.get("defi_dominance"))
+        else:
+            # The DeFi leg alone failed (headline is fine). Flag it on a SCOPED field, not the
+            # headline ``status`` — otherwise a consumer would discard good market-cap/dominance
+            # data. So the null defi fields read as 'unavailable', not real zeros.
+            macro.defi_status = unavailable_status(defi)
         return macro
 
     async def get_sectors(self) -> CryptoSectors:

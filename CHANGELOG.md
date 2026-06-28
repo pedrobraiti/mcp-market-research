@@ -6,6 +6,21 @@ dates anchor the entries.
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-06-28
+
+### Fixed
+- **yfinance's own throttle now counts as rate-limited.** `classify_transient` only recognized a
+  429 via an httpx `response`; yfinance raises `YFRateLimitError` (no `.response`), so the primary
+  equity source's most common throttle slipped through as a genuine `error` — no retry, wrong bucket.
+  It is now matched by class name (`*RateLimit*`) → backed off and labelled `unavailable: rate_limited`.
+- **Crypto momentum fields are now calendar-aware.** Lookbacks were fixed bar counts (63/126/252), so
+  a crypto `momentum_6m` (24/7, ~365 bars/yr) silently measured ~4 months. They now scale with
+  `periods_per_year` (equities 63/126/252, crypto 91/182/365; `momentum_12_1` likewise) so a labelled
+  horizon means that many calendar months on both asset classes.
+- **A DeFi-only `crypto_macro` failure is now flagged.** When only the DeFi leg failed (headline fine),
+  the null `defi_market_cap_usd`/`defi_dominance` read as real zeros. A new scoped `defi_status` flags
+  it without touching the headline `status` (which would wrongly imply the whole reading is unavailable).
+
 ## [0.4.0] — 2026-06-28
 
 ### Added

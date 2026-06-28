@@ -124,8 +124,16 @@ _TRADING_DAYS_PER_YEAR = 252  # equities; crypto trades 24/7 → pass 365
 _MIN_BARS_FOR_VOL = 20  # below this a vol estimate is too noisy to report
 _MIN_BARS_FOR_RATIO = 30  # Sharpe/Sortino need a minimal sample to mean anything
 _MIN_BARS_FOR_SHAPE = 60  # skew/kurtosis are high-moment → demand more data
-_MOM_LOOKBACKS = {"momentum_3m": 63, "momentum_6m": 126, "momentum_12m": 252}
-_MOM_SKIP = 21  # ~one month, skipped in 12-1 momentum to drop short-term reversal
+def _momentum_lookbacks(periods_per_year: int) -> dict[str, int]:
+    """Calendar-aware momentum lookbacks. A field labelled ``momentum_6m`` must mean 6 calendar
+    months, so the bar count scales with ``periods_per_year`` — 252 trading days for equities,
+    365 for 24/7 crypto. Hardcoding 63/126/252 would silently make crypto's '6m' measure ~4
+    months (it has ~365 bars/yr, not 252), reporting a confidently mislabelled number."""
+    return {
+        "momentum_3m": round(periods_per_year / 4),
+        "momentum_6m": round(periods_per_year / 2),
+        "momentum_12m": periods_per_year,
+    }
 
 
 def _mean(values: list[float]) -> float:
@@ -341,12 +349,18 @@ def momentum(closes: list[float], lookback: int) -> float | None:
     return closes[-1] / base - 1
 
 
-def momentum_12_1(closes: list[float]) -> float | None:
+def momentum_12_1(
+    closes: list[float], periods_per_year: int = _TRADING_DAYS_PER_YEAR
+) -> float | None:
     """12-month return skipping the most recent month (classic momentum factor), removing
-    the short-term reversal that contaminates raw 12-month momentum."""
-    if len(closes) <= 252:
+    the short-term reversal that contaminates raw 12-month momentum. The 12-month and 1-month
+    windows are calendar-aware (scale with ``periods_per_year``) so crypto's 24/7 bars map to
+    true months, not ~8 months mislabelled as 12."""
+    year = periods_per_year
+    skip = round(periods_per_year / 12)  # ~one month
+    if len(closes) <= year:
         return None
-    recent, far = closes[-1 - _MOM_SKIP], closes[-1 - 252]
+    recent, far = closes[-1 - skip], closes[-1 - year]
     if far <= 0:
         return None
     return recent / far - 1
@@ -467,6 +481,7 @@ def compute_technicals(
     else:
         ohlc_vol = rogers_satchell_volatility(opens_a, highs_a, lows_a, closes_a, periods_per_year)
         estimator = "rogers_satchell"
+    _mom_lookbacks = _momentum_lookbacks(periods_per_year)
 
     return Technicals(
         symbol=history.symbol,
@@ -497,10 +512,10 @@ def compute_technicals(
         calmar_ratio=_q(calmar_ratio(closes, periods_per_year), 4),
         return_skew=_q(skewness(returns), 4),
         return_kurtosis=_q(excess_kurtosis(returns), 4),
-        momentum_3m=_q(momentum(closes, _MOM_LOOKBACKS["momentum_3m"]), 4),
-        momentum_6m=_q(momentum(closes, _MOM_LOOKBACKS["momentum_6m"]), 4),
-        momentum_12m=_q(momentum(closes, _MOM_LOOKBACKS["momentum_12m"]), 4),
-        momentum_12_1=_q(momentum_12_1(closes), 4),
+        momentum_3m=_q(momentum(closes, _mom_lookbacks["momentum_3m"]), 4),
+        momentum_6m=_q(momentum(closes, _mom_lookbacks["momentum_6m"]), 4),
+        momentum_12m=_q(momentum(closes, _mom_lookbacks["momentum_12m"]), 4),
+        momentum_12_1=_q(momentum_12_1(closes, periods_per_year), 4),
         annualization_factor=periods_per_year,
         bars_used=len(closes),
     )

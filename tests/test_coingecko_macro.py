@@ -61,6 +61,8 @@ async def test_macro_tolerates_defi_failure():
     assert result.btc_dominance == Decimal("54.2")  # global still parsed
     assert result.defi_market_cap_usd is None  # defi failed, left null
     assert result.status is None  # the headline leg succeeded → no unavailable flag
+    assert result.defi_status is not None  # but the defi-only failure IS flagged (scoped)
+    assert "unavailable" in result.defi_status
 
 
 async def test_macro_raises_when_both_legs_rate_limited():

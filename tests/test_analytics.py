@@ -143,6 +143,19 @@ def test_momentum_horizons():
     assert momentum_12_1([1.0, 2.0, 3.0]) is None  # needs > 252 bars
 
 
+def test_momentum_lookbacks_are_calendar_aware():
+    # A 'momentum_6m' field must mean 6 calendar months. Equities use 252 trading days/yr,
+    # crypto 365 (24/7) — so the bar counts must scale, or crypto's '6m' silently measures ~4.
+    from scout.analytics import _momentum_lookbacks
+
+    assert _momentum_lookbacks(252) == {"momentum_3m": 63, "momentum_6m": 126, "momentum_12m": 252}
+    assert _momentum_lookbacks(365) == {"momentum_3m": 91, "momentum_6m": 182, "momentum_12m": 365}
+    # crypto 12-1 needs a full 365-bar year, not 252
+    flat = [100.0] * 360
+    assert momentum_12_1(flat, periods_per_year=365) is None  # 360 < 365 → insufficient
+    assert momentum_12_1([100.0] * 370, periods_per_year=365) == 0.0
+
+
 def test_normal_cdf_known_points():
     assert abs(normal_cdf(0.0) - 0.5) < 1e-12
     assert abs(normal_cdf(1.96) - 0.975) < 1e-3

@@ -27,6 +27,17 @@ def test_classify_detects_timeout_by_name():
     assert classify_transient(_ReadTimeout()) == "timeout"
 
 
+def test_classify_detects_rate_limit_by_name_without_response():
+    # yfinance raises YFRateLimitError — its own throttle type with NO httpx ``response``.
+    # It must still be classified as rate_limited (retry + honest label), not slip through
+    # as a genuine error on the primary equity source.
+    class YFRateLimitError(Exception):
+        pass
+
+    err = YFRateLimitError("Too Many Requests. Rate limited.")
+    assert classify_transient(err) == "rate_limited"
+
+
 def test_classify_ignores_non_transient():
     assert classify_transient(_HttpError(404)) is None
     assert classify_transient(ValueError("bad payload")) is None
