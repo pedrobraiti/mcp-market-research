@@ -82,9 +82,11 @@ class CompanySnapshot(BaseModel):
     recent_splits: list[StockSplit] = Field(
         default_factory=list,
         description=(
-            "Recent stock splits (newest first), so a split-adjusted price isn't mistaken for "
-            "'wrong' against pre-split memory. Empty when none are known. Price and 52-week range "
-            "are already split-adjusted by the source."
+            "Genuinely recent stock splits (newest first), within ~24 months of as_of (or "
+            "today), so a split-adjusted price isn't mistaken for 'wrong' against pre-split "
+            "memory. Empty when the stock hasn't split in that window — older splits are "
+            "history, not 'recent'. Price and 52-week range are already split-adjusted by the "
+            "source."
         ),
     )
     as_of: date | None = None

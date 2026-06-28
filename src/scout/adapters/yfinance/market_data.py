@@ -14,7 +14,7 @@ import asyncio
 import math
 import time
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
@@ -660,6 +660,9 @@ class YFinanceMarketData:
 
 # ---- module-level helpers (pure, easy to reason about) -------------------------------
 
+# A split older than this (relative to as_of, or today) is company history, not "recent".
+_RECENT_SPLIT_WINDOW = timedelta(days=365 * 2)  # ~24 months
+
 
 def _info(ticker: Any) -> dict:
     # Deliberately does NOT swallow exceptions: a transient/HTTP error must propagate so the
@@ -670,24 +673,32 @@ def _info(ticker: Any) -> dict:
 
 
 def _recent_splits(ticker: Any, as_of: date | None, limit: int = 3) -> list[StockSplit]:
-    """Most recent stock splits (newest first), at or before ``as_of``.
+    """Genuinely *recent* stock splits (newest first), at or before ``as_of``.
 
-    yfinance exposes ``Ticker.splits`` (a date-indexed ratio series). It is supplementary
-    context — a transient failure or its absence must NEVER fail the snapshot — so every error
-    degrades to an empty list. Surfacing it lets a consumer see that, e.g., NFLX's post-10:1
-    price is correct-and-adjusted, not "wrong" against pre-split memory.
+    yfinance exposes ``Ticker.splits`` (a date-indexed ratio series), but it spans a company's
+    whole history — so a naive "latest few" surfaces decades-old splits and is never empty for
+    anything that ever split, defeating the point. Only splits within ``_RECENT_SPLIT_WINDOW``
+    of the reference date (``as_of`` when given, else today) qualify; older ones are history,
+    not "recent", and yield an empty list. This keeps the field honest: a non-empty list means
+    "this stock actually split recently", e.g. NFLX's post-10:1 price is correct-and-adjusted,
+    not "wrong" against pre-split memory.
+
+    It is supplementary context — a transient failure or its absence must NEVER fail the
+    snapshot — so every error degrades to an empty list.
     """
     try:
         series = getattr(ticker, "splits", None)
         if series is None or len(series) == 0:
             return []
+        reference = as_of or date.today()
+        cutoff = reference - _RECENT_SPLIT_WINDOW
         splits: list[StockSplit] = []
         for index_value, ratio in series.items():
             split_date = _to_date(index_value)
             value = _dec(ratio)
             if split_date is None or value is None or value <= 0:
                 continue
-            if as_of is not None and split_date > as_of:
+            if split_date > reference or split_date < cutoff:
                 continue
             splits.append(StockSplit(date=split_date, ratio=value))
         splits.sort(key=lambda s: s.date, reverse=True)

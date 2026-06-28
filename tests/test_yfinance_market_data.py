@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pandas as pd
@@ -180,17 +180,58 @@ async def test_snapshot_with_as_of_uses_history_close():
     assert snapshot.as_of == date(2024, 6, 11)
 
 
-async def test_snapshot_surfaces_recent_splits_newest_first():
+async def test_snapshot_surfaces_only_recent_splits_newest_first():
+    today = date.today()
+    recent = today - timedelta(days=120)
+    older_but_recent = today - timedelta(days=600)
+    ancient = today - timedelta(days=365 * 10)
+
+    class RecentAndAncientSplitTicker(FakeTicker):
+        def __init__(self, symbol):
+            super().__init__(symbol)
+            self.splits = pd.Series(
+                {
+                    pd.Timestamp(ancient): 7.0,
+                    pd.Timestamp(older_but_recent): 3.0,
+                    pd.Timestamp(recent): 10.0,
+                }
+            )
+
+    source = YFinanceMarketData(ticker_factory=RecentAndAncientSplitTicker)
+    snapshot = await source.get_snapshot("NFLX")
+    assert snapshot is not None
+    assert [s.date for s in snapshot.recent_splits] == [recent, older_but_recent]
+    assert snapshot.recent_splits[0].ratio == Decimal("10.0")
+
+
+async def test_snapshot_excludes_decades_old_splits():
+    # The default fake ticker only ever split in 2014/2020 — ancient as of today.
     snapshot = await _source().get_snapshot("AAPL")
     assert snapshot is not None
-    assert [s.date for s in snapshot.recent_splits] == [date(2020, 8, 31), date(2014, 6, 9)]
-    assert snapshot.recent_splits[0].ratio == Decimal("4.0")
+    assert snapshot.recent_splits == []
 
 
-async def test_snapshot_as_of_filters_splits_after_date():
-    snapshot = await _source().get_snapshot("AAPL", as_of=date(2018, 1, 1))
+async def test_snapshot_as_of_windows_splits_around_as_of():
+    as_of = date(2024, 1, 1)
+    in_window = date(2023, 6, 1)  # within ~24 months before as_of
+    after_as_of = date(2024, 6, 1)  # later than as_of -> excluded
+    ancient = date(2014, 6, 9)  # decades before as_of -> excluded
+
+    class AsOfSplitTicker(FakeTicker):
+        def __init__(self, symbol):
+            super().__init__(symbol)
+            self.splits = pd.Series(
+                {
+                    pd.Timestamp(ancient): 7.0,
+                    pd.Timestamp(in_window): 4.0,
+                    pd.Timestamp(after_as_of): 2.0,
+                }
+            )
+
+    source = YFinanceMarketData(ticker_factory=AsOfSplitTicker)
+    snapshot = await source.get_snapshot("X", as_of=as_of)
     assert snapshot is not None
-    assert [s.date for s in snapshot.recent_splits] == [date(2014, 6, 9)]
+    assert [s.date for s in snapshot.recent_splits] == [in_window]
 
 
 async def test_snapshot_splits_empty_when_none():
