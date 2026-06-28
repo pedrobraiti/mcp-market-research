@@ -191,3 +191,29 @@ ADR-006/007/008 — compute once, in the data layer, measures not verdicts.
 - **Deferred (M5b).** Perp basis needs a spot price (cross-source) and the long/short build-up read
   needs ΔOI (two snapshots in time) — the latter breaks statelessness (ADR-003), so both are left
   out rather than faked.
+
+---
+
+## ADR-010 — Crypto cycle/tokenomics measures, and shipping null over faking
+
+**Decision.** Add the **Mayer Multiple** (price / SMA-200) to `technicals`/`crypto_technicals` and
+tokenomics ratios (float ratio, issuance progress, future dilution) to `crypto_asset_profile`.
+
+**Why.** The Mayer Multiple is the canonical Bitcoin cycle gauge and both inputs (last price and
+SMA-200) were already computed in `compute_technicals` — it was one division away. Supply ratios
+turn raw circulating/total/max counts into a read on unlock overhang and issuance progress.
+
+**Choices that matter.**
+- **Null over faked.** The free Coinpaprika tier currently returns `circulating_supply` as null for
+  some assets (BTC included), so the circulating-based ratios come back null. They are kept as-is —
+  correct when the source provides the field, null (not a guessed substitute) when it doesn't.
+  Falling back to total-supply would silently change the metric's meaning, so it isn't done; the
+  caveat is documented instead. (M6b: source circulating supply elsewhere if this proves chronic.)
+- **Uncapped assets.** Max-based ratios (issuance progress, future dilution) are null when there is
+  no max supply (ETH and others) rather than dividing by zero.
+- **Mayer is generic.** price/SMA-200 is reported for equities too (how far above/below the 200-day
+  average); the bands (<0.8 accumulation, >2.4 euphoria) are BTC-calibrated, so the name documents
+  intent while the number stays a plain measure (ADR-004).
+- **Deferred (M6b).** SSR (market cap ÷ stablecoin supply) and Mcap/TVL need cross-source joins;
+  on-chain valuation (MVRV/NVT/realized cap) needs node/Glassnode data the keyless sources don't
+  provide — not approximated.

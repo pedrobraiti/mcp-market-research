@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from ...domain.models import CryptoAssetProfile, CryptoSymbolMatch, CryptoSymbolSearch
@@ -35,6 +35,16 @@ def _int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _ratio_pos(
+    numerator: Decimal | None, denominator: Decimal | None, places: int
+) -> Decimal | None:
+    """Ratio only when the denominator is strictly positive (max_supply is null/0 for uncapped
+    assets like ETH, which must yield null rather than a divide error)."""
+    if numerator is None or denominator is None or denominator <= 0:
+        return None
+    return (numerator / denominator).quantize(Decimal(10) ** -places, rounding=ROUND_HALF_UP)
 
 
 def _date(raw: Any) -> date | None:
@@ -91,6 +101,10 @@ class CoinpaprikaAssets:
         if not ticker:
             return None
         usd = (ticker.get("quotes") or {}).get("USD") or {}
+        circulating = _dec(ticker.get("circulating_supply"))
+        total = _dec(ticker.get("total_supply"))
+        max_supply = _dec(ticker.get("max_supply"))
+        future_overhang = max_supply - circulating if max_supply and circulating else None
         return CryptoAssetProfile(
             base=str(ticker.get("symbol", query)).upper(),
             name=ticker.get("name"),
@@ -99,12 +113,15 @@ class CoinpaprikaAssets:
             price_usd=_dec(usd.get("price")),
             market_cap_usd=_dec(usd.get("market_cap")),
             volume_24h_usd=_dec(usd.get("volume_24h")),
-            circulating_supply=_dec(ticker.get("circulating_supply")),
-            total_supply=_dec(ticker.get("total_supply")),
-            max_supply=_dec(ticker.get("max_supply")),
+            circulating_supply=circulating,
+            total_supply=total,
+            max_supply=max_supply,
             ath_price_usd=_dec(usd.get("ath_price")),
             ath_date=_date(usd.get("ath_date")),
             percent_from_ath=_dec(usd.get("percent_from_price_ath")),
+            float_ratio=_ratio_pos(circulating, total, 4),
+            issuance_progress=_ratio_pos(circulating, max_supply, 4),
+            future_dilution=_ratio_pos(future_overhang, circulating, 4),
         )
 
     async def search(self, query: str, limit: int = 10) -> CryptoSymbolSearch:

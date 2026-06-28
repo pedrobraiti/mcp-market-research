@@ -458,7 +458,9 @@ def compute_technicals(
 
     returns = pct_returns(closes)
     last_price = closes[-1] if closes else None
+    sma_200 = sma(closes, 200)
     atr_14 = atr(highs, lows, closes, 14)
+    mayer = last_price / sma_200 if last_price and sma_200 and sma_200 > 0 else None
     if overnight_gaps:
         ohlc_vol = yang_zhang_volatility(opens_a, highs_a, lows_a, closes_a, periods_per_year)
         estimator = "yang_zhang"
@@ -471,7 +473,8 @@ def compute_technicals(
         as_of=history.as_of,
         last_price=_q(last_price, 4),
         sma_50=_q(sma(closes, 50), 4),
-        sma_200=_q(sma(closes, 200), 4),
+        sma_200=_q(sma_200, 4),
+        mayer_multiple=_q(mayer, 4),
         ema_20=_q(ema_last(closes, 20), 4),
         rsi_14=_q(rsi(closes, 14), 2),
         macd=_q(macd_value, 4),

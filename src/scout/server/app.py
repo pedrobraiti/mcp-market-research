@@ -327,8 +327,9 @@ async def technicals(symbol: str, as_of: str | None = None) -> dict:
 
     Returns last price, SMA(50/200), EMA(20), RSI(14), MACD (line/signal/histogram), ATR(14)
     and the 52-week high/low, plus a derived risk/momentum layer: annualized volatility
-    (close-to-close and Yang-Zhang OHLC), ATR%, 52w range position, Sharpe/Sortino/Calmar,
-    max drawdown (+ underwater bars), return skew/kurtosis and momentum (3m/6m/12m and 12-1).
+    (close-to-close and Yang-Zhang OHLC), ATR%, 52w range position, the Mayer Multiple
+    (price/SMA200), Sharpe/Sortino/Calmar, max drawdown (+ underwater bars), return skew/kurtosis
+    and momentum (3m/6m/12m and 12-1).
     Ratios are annualized at 252 trading days with risk-free=0. These are **raw numbers, not a
     verdict** — it reports RSI, drawdown, Sharpe; it does not say "overbought" or "good risk".
     Pass `as_of` (YYYY-MM-DD) for a point-in-time read. `data` is null if there isn't enough
@@ -748,8 +749,9 @@ async def crypto_technicals(symbol: str, as_of: str | None = None) -> dict:
     """Technical indicators for a crypto pair, computed from ~300 daily candles.
 
     Same indicator set as the equities `technicals` tool plus the derived risk/momentum layer
-    (volatility, ATR%, 52w range position, Sharpe/Sortino/Calmar, max drawdown, skew/kurtosis,
-    momentum), reusing the same pure math. Crypto-calibrated: ratios annualize at 365 (24/7) and
+    (volatility, ATR%, 52w range position, Mayer Multiple price/SMA200, Sharpe/Sortino/Calmar,
+    max drawdown, skew/kurtosis, momentum), reusing the same pure math. Crypto-calibrated: ratios
+    annualize at 365 (24/7) and
     OHLC volatility uses the Rogers-Satchell estimator (no overnight gap to model). `symbol` is a
     CCXT pair ("BTC/USDT" or "BTC"); pass `as_of` (YYYY-MM-DD) for a point-in-time read. **Raw
     numbers, not a verdict** (no "overbought"/"uptrend"). `data` is null if there isn't enough
@@ -779,9 +781,12 @@ async def crypto_asset_profile(symbol: str) -> dict:
     """Supply, market cap, rank and ATH for a crypto asset — the 'fundamentals' of crypto.
 
     `symbol` is the base asset ("BTC", or a pair like "BTC/USDT" — only the base is used).
-    Returns circulating/total/max supply, USD market cap & rank, 24h volume, and all-time-high
-    price/date with % from ATH (from Coinpaprika, keyed by the asset, not one exchange). Raw
-    facts, not a valuation. `data` is null if the asset can't be resolved.
+    Returns circulating/total/max supply, USD market cap & rank, 24h volume, all-time-high
+    price/date with % from ATH, and derived tokenomics: float_ratio (circulating/total),
+    issuance_progress (circulating/max — % of final supply minted) and future_dilution
+    ((max−circulating)/circulating — supply overhang); the last two are null for uncapped assets
+    (no max supply, e.g. ETH). From Coinpaprika, keyed by the asset, not one exchange. Raw facts,
+    not a valuation. `data` is null if the asset can't be resolved.
     """
     svc = services()
     if svc.crypto_assets is None:

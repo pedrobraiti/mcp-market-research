@@ -219,6 +219,8 @@ def test_compute_technicals_populates_derived_layer():
     assert tech.volatility_annualized is not None
     assert tech.volatility_ohlc is not None
     assert tech.volatility_estimator == "yang_zhang"  # equities default → gaps modeled
+    assert tech.mayer_multiple is not None  # 260 / SMA200(160.5) ≈ 1.62
+    assert Decimal("1.5") < tech.mayer_multiple < Decimal("1.7")
     assert tech.atr_pct is not None and tech.atr_pct > 0
     assert tech.range_position_52w is not None
     assert tech.sharpe_ratio is not None

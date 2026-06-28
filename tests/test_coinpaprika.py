@@ -49,6 +49,23 @@ async def test_get_profile_builds_model():
     assert profile.max_supply == Decimal("21000000")
     assert profile.ath_date == date(2024, 3, 14)
     assert profile.percent_from_ath == Decimal("-8.2")
+    # Derived tokenomics: circulating == total → float 1.0; 19.7M/21M minted; ~6.6% overhang.
+    assert profile.float_ratio == Decimal("1.0000")
+    assert profile.issuance_progress == Decimal("0.9381")
+    assert profile.future_dilution == Decimal("0.0660")
+
+
+async def test_get_profile_uncapped_supply_yields_null_max_ratios():
+    ticker = {
+        **_TICKER,
+        "circulating_supply": 120000000,
+        "total_supply": 120000000,
+        "max_supply": 0,  # uncapped (e.g. ETH) → max-based ratios must be null, not a divide error
+    }
+    profile = await _source(ticker=ticker).get_profile("ETH")
+    assert profile.float_ratio == Decimal("1.0000")
+    assert profile.issuance_progress is None  # no max supply to measure against
+    assert profile.future_dilution is None
 
 
 async def test_get_profile_prefers_exact_symbol_match():

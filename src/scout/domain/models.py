@@ -283,6 +283,7 @@ class Technicals(BaseModel):
     last_price: Decimal | None = None
     sma_50: Decimal | None = None
     sma_200: Decimal | None = None
+    mayer_multiple: Decimal | None = None  # price / SMA(200) — the Mayer Multiple (cycle gauge)
     ema_20: Decimal | None = None
     rsi_14: Decimal | None = None
     macd: Decimal | None = None
@@ -754,6 +755,10 @@ class CryptoAssetProfile(BaseModel):
     ath_price_usd: Decimal | None = None
     ath_date: date | None = None
     percent_from_ath: Decimal | None = None
+    # Derived tokenomics (raw ratios, not a verdict):
+    float_ratio: Decimal | None = None  # circulating / total supply (how much is unlocked)
+    issuance_progress: Decimal | None = None  # circulating / max supply (% of final supply minted)
+    future_dilution: Decimal | None = None  # (max − circulating)/circulating — supply overhang
 
 
 class FearGreedPoint(BaseModel):

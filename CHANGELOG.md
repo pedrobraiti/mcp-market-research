@@ -74,6 +74,13 @@ dates anchor the entries.
   **microprice** (size-weighted fair price). Annualized funding assumes the venues' 8h interval
   (a single next-funding snapshot can't reveal the true interval) and flags it in `note`. See
   ADR-009.
+- **Crypto cycle/tokenomics measures:** the **Mayer Multiple** (price / SMA-200) on `technicals`
+  and `crypto_technicals` — both inputs were already computed — and tokenomics ratios on
+  `crypto_asset_profile`: **float_ratio** (circulating/total), **issuance_progress**
+  (circulating/max) and **future_dilution** ((max−circulating)/circulating). Max-based ratios are
+  null for uncapped assets (no max supply). The circulating-based ratios populate only when the
+  source reports circulating supply (the free Coinpaprika tier currently returns it null for some
+  assets — they degrade to null rather than erroring). See ADR-010.
 - Resilience: retry/backoff on yfinance, and a transparent **stooq fallback** for price history so
   a yfinance failure doesn't lose data.
 - 145 offline tests; live-validated against every source.
