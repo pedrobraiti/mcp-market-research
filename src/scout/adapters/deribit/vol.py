@@ -15,10 +15,13 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from ...analytics import percentile_of_last, zscore_of_last
 from ...domain.models import CryptoImpliedVol, VolPoint
 
 _BASE = "https://www.deribit.com/api/v2/public"
 _DAY_MS = 86_400_000
+_HISTORY_DAYS = 180  # ~6 months of daily DVOL for a meaningful vol-regime z-score/percentile
+_MIN_FOR_REGIME = 20  # below this the z-score/percentile is too noisy to report
 
 
 def _dec(value: Any) -> Decimal | None:
@@ -35,6 +38,10 @@ def _ms_to_dt(ms: Any) -> datetime | None:
         return datetime.fromtimestamp(int(ms) / 1000, tz=UTC)
     except (TypeError, ValueError, OverflowError):
         return None
+
+
+def _round(value: float | None, places: int) -> Decimal | None:
+    return None if value is None else Decimal(str(round(value, places)))
 
 
 class DeribitVol:
@@ -67,7 +74,7 @@ class DeribitVol:
                 asset=currency, note="Deribit DVOL is available for BTC and ETH only."
             )
         index_name = f"{currency.lower()}dvol_usdc"
-        start, end = self._window(30)
+        start, end = self._window(_HISTORY_DAYS)
         index, series = await asyncio.gather(
             self._fetch_json(f"{_BASE}/get_index_price?index_name={index_name}"),
             self._fetch_json(
@@ -96,4 +103,17 @@ class DeribitVol:
                         close=_dec(row[4]),
                     )
                 )
-        return CryptoImpliedVol(asset=currency, dvol_current=current, history=history)
+        z = pct = None
+        closes = [float(p.close) for p in history if p.close is not None]
+        if current is not None and len(closes) >= _MIN_FOR_REGIME:
+            window = [*closes, float(current)]  # score the current DVOL within its own history
+            z = zscore_of_last(window)
+            scored = percentile_of_last(window)
+            pct = scored * 100 if scored is not None else None
+        return CryptoImpliedVol(
+            asset=currency,
+            dvol_current=current,
+            dvol_zscore=_round(z, 2),
+            dvol_percentile=_round(pct, 1),
+            history=history,
+        )

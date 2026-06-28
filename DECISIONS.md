@@ -193,9 +193,11 @@ ADR-006/007/008 — compute once, in the data layer, measures not verdicts.
   more weight on the side with *less* size, which is the better estimate of the next trade price
   than the plain mid — useful for execution and for reading short-horizon pressure alongside
   `imbalance`.
-- **Deferred (M5b).** Perp basis needs a spot price (cross-source) and the long/short build-up read
-  needs ΔOI (two snapshots in time) — the latter breaks statelessness (ADR-003), so both are left
-  out rather than faked.
+- **Partly followed up (M5b).** DVOL z-score & percentile vs a ~6-month window were added to
+  `crypto_implied_vol` (the crypto analogue of the VIX regime read), self-contained from its own
+  history. Still out: perp basis needs a spot price (cross-source tool-join for moderate value) and
+  the long/short build-up needs ΔOI (two snapshots → breaks statelessness, ADR-003); order-book
+  depth-impact is marginal given imbalance/microprice already ship and the snapshot is shallow.
 
 ---
 

@@ -84,6 +84,9 @@ dates anchor the entries.
   **microprice** (size-weighted fair price). Annualized funding assumes the venues' 8h interval
   (a single next-funding snapshot can't reveal the true interval) and flags it in `note`. See
   ADR-009.
+- **DVOL regime read** on `crypto_implied_vol`: the current DVOL's **z-score and percentile** vs a
+  trailing ~6-month window (extended from ~1 month for a meaningful regime) — the crypto analogue of
+  the VIX z-score, self-contained from DVOL's own history. See ADR-009.
 - **Crypto cycle/tokenomics measures:** the **Mayer Multiple** (price / SMA-200) on `technicals`
   and `crypto_technicals` — both inputs were already computed — and tokenomics ratios on
   `crypto_asset_profile`: **float_ratio** (circulating/total), **issuance_progress**

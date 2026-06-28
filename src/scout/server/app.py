@@ -1008,9 +1008,10 @@ async def crypto_derivatives(symbol: str) -> dict:
 async def crypto_implied_vol(asset: str = "BTC") -> dict:
     """The Deribit DVOL index ('crypto VIX') — options-implied volatility for BTC or ETH.
 
-    Returns the current DVOL value plus recent daily history. It's how much swing the options market
-    is pricing — useful to size a stop or read whether vol is cheap/expensive. BTC/ETH only (others
-    return a note). Raw index, not a trade call.
+    Returns the current DVOL value, its z-score and percentile vs the trailing ~6-month window (the
+    vol regime — cheap vs expensive relative to its own history), plus the daily history. It's how
+    much swing the options market is pricing — useful to size a stop or read whether vol is
+    cheap/expensive. BTC/ETH only (others return a note). Raw index, not a trade call.
     """
     svc = services()
     if svc.crypto_vol is None:

@@ -869,6 +869,8 @@ class CryptoImpliedVol(BaseModel):
 
     asset: str
     dvol_current: Decimal | None = None
+    dvol_zscore: Decimal | None = None  # current DVOL vs its recent window (vol regime)
+    dvol_percentile: Decimal | None = None  # current DVOL's percentile within that window, %
     history: list[VolPoint] = []
     note: str | None = None
 
