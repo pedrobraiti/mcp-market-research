@@ -53,3 +53,39 @@ async def test_partial_failure_drops_only_that_series():
     assert "VIXCLS" not in ids
     assert "FEDFUNDS" in ids
     assert len(snapshot.indicators) == 6
+
+
+class _Resp:
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+
+
+class _FakeHttpError(Exception):
+    """Mimics httpx.HTTPStatusError enough for the retry classifier (has .response.status_code)."""
+
+    def __init__(self, status_code: int) -> None:
+        self.response = _Resp(status_code)
+        super().__init__(f"HTTP {status_code}")
+
+
+async def test_rate_limited_series_is_flagged_not_dropped():
+    calls = {"n": 0}
+
+    async def rate_limited_fetch(url: str) -> str:
+        if "VIXCLS" in url:
+            calls["n"] += 1
+            raise _FakeHttpError(429)
+        return _CSV[url.split("id=")[-1]]
+
+    snapshot = await FredMacro(
+        fetch_csv=rate_limited_fetch, retry_attempts=3, retry_base_delay=0
+    ).get_macro_context()
+    by_id = {i.series_id: i for i in snapshot.indicators}
+    # The series is RETRIED the full budget, then kept WITH a status — not silently dropped.
+    assert calls["n"] == 3
+    assert "VIXCLS" in by_id
+    assert by_id["VIXCLS"].value is None
+    assert by_id["VIXCLS"].status == "unavailable: rate_limited"
+    # The healthy series are unaffected.
+    assert by_id["FEDFUNDS"].value == Decimal("3.63")
+    assert by_id["FEDFUNDS"].status is None

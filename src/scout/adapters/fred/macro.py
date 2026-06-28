@@ -15,6 +15,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from ...domain.models import MacroIndicator, MacroSnapshot
+from ..retry import SourceUnavailable, with_retry
 
 _CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
 
@@ -72,8 +73,12 @@ class FredMacro:
         self,
         fetch_csv: Callable[[str], Awaitable[str]] | None = None,
         timeout: float = 15.0,
+        retry_attempts: int = 3,
+        retry_base_delay: float = 0.5,
     ) -> None:
         self._timeout = timeout
+        self._retry_attempts = retry_attempts
+        self._retry_base_delay = retry_base_delay
         self._fetch_csv = fetch_csv or self._default_fetch_csv
 
     async def _default_fetch_csv(self, url: str) -> str:
@@ -93,7 +98,17 @@ class FredMacro:
         return MacroSnapshot(indicators=indicators, as_of=as_of)
 
     async def _one(self, series_id: str, name: str, as_of: date | None) -> MacroIndicator:
-        csv_text = await self._fetch_csv(_CSV_URL.format(series=series_id))
+        url = _CSV_URL.format(series=series_id)
+        try:
+            csv_text = await with_retry(
+                lambda: self._fetch_csv(url),
+                attempts=self._retry_attempts,
+                base_delay=self._retry_base_delay,
+            )
+        except SourceUnavailable as exc:
+            # Keep the series in the snapshot but flag it: a rate-limited/timed-out series must
+            # not vanish (which would read as "no such indicator") — value is null WITH a status.
+            return MacroIndicator(series_id=series_id, name=name, value=None, status=exc.status)
         value, observation_date = _latest(csv_text, as_of)
         return MacroIndicator(
             series_id=series_id, name=name, value=value, observation_date=observation_date

@@ -50,6 +50,15 @@ class SymbolSearch(BaseModel):
     matches: list[SymbolMatch] = []
 
 
+class StockSplit(BaseModel):
+    """A single executed stock split. ``ratio`` is shares-out per old share (e.g. 10 for 10:1)."""
+
+    date: date
+    ratio: Decimal | None = Field(
+        default=None, description="New shares per old share — 10 means a 10:1 split, 0.1 a 1:10."
+    )
+
+
 class CompanySnapshot(BaseModel):
     """A light, single-call portrait: price, day move and the key multiples."""
 
@@ -70,6 +79,14 @@ class CompanySnapshot(BaseModel):
     fifty_two_week_low: Decimal | None = None
     sector: str | None = None
     industry: str | None = None
+    recent_splits: list[StockSplit] = Field(
+        default_factory=list,
+        description=(
+            "Recent stock splits (newest first), so a split-adjusted price isn't mistaken for "
+            "'wrong' against pre-split memory. Empty when none are known. Price and 52-week range "
+            "are already split-adjusted by the source."
+        ),
+    )
     as_of: date | None = None
 
 
@@ -284,6 +301,13 @@ class MacroIndicator(BaseModel):
     name: str
     value: Decimal | None = None
     observation_date: date | None = None
+    status: str | None = Field(
+        default=None,
+        description=(
+            "Set when the series couldn't be fetched (e.g. 'unavailable: rate_limited' / "
+            "'unavailable: timeout') — distinct from a genuine null value. None means fetched OK."
+        ),
+    )
 
 
 class MacroSnapshot(BaseModel):
@@ -556,6 +580,13 @@ class WebNewsSearch(BaseModel):
 
     query: str
     items: list[WebNewsItem] = []
+    source_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when the source couldn't be reached (e.g. 'unavailable: rate_limited') — so an "
+            "empty result from a 429/timeout is distinguishable from a genuine 'no matches'."
+        ),
+    )
 
 
 class FilingSearchHit(BaseModel):

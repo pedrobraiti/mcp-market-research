@@ -50,3 +50,32 @@ async def test_search_news_empty_response():
 
     result = await GdeltNewsSearch(fetch_json=_fetch).search_news("nothing")
     assert result.items == []
+    assert result.source_status is None  # genuine "no matches", not a fetch failure
+
+
+class _Resp:
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+
+
+class _FakeHttpError(Exception):
+    """Mimics httpx.HTTPStatusError for the retry classifier (carries .response.status_code)."""
+
+    def __init__(self, status_code: int) -> None:
+        self.response = _Resp(status_code)
+        super().__init__(f"HTTP {status_code}")
+
+
+async def test_search_news_rate_limited_marks_unavailable():
+    calls = {"n": 0}
+
+    async def _fetch(url: str) -> dict:
+        calls["n"] += 1
+        raise _FakeHttpError(429)
+
+    source = GdeltNewsSearch(fetch_json=_fetch, retry_attempts=3, retry_base_delay=0)
+    result = await source.search_news("AI data center power")
+    assert calls["n"] == 3  # retried the full budget before giving up
+    assert result.items == []
+    # A 429 is "couldn't fetch", distinguishable from an empty-but-successful response.
+    assert result.source_status == "unavailable: rate_limited"

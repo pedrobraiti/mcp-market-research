@@ -202,9 +202,12 @@ async def company_snapshot(symbol: str, as_of: str | None = None) -> dict:
     """Light single-call portrait of a US stock/ETF: price, day move and key multiples.
 
     Returns name, currency, price, previous_close, change/percent, market cap, trailing &
-    forward P/E, dividend yield, 52-week high/low, sector and industry. Pass `as_of`
-    (YYYY-MM-DD) to read a past date — historical reads return price/move only (point-in-time
-    multiples are not available yet). `data` is null if the symbol can't be resolved.
+    forward P/E, dividend yield, 52-week high/low, sector and industry. Also `recent_splits`
+    (newest first) — so a split-adjusted price (e.g. NFLX post-10:1) isn't read as "wrong"
+    against pre-split memory; price and the 52-week range are already split-adjusted. Pass
+    `as_of` (YYYY-MM-DD) to read a past date — historical reads return price/move (plus splits
+    up to that date) only (point-in-time multiples are not available yet). `data` is null if the
+    symbol can't be resolved.
     """
     svc = services()
     try:
@@ -367,6 +370,10 @@ async def news(symbol: str, limit: int = 10) -> dict:
 
     Returns the latest items so you can scan what's moving a name — and pass an interesting
     `url` to `extract` to read the full story. Headlines only; it does not score sentiment.
+
+    NOT EXHAUSTIVE for corporate events: a quiet news feed does not mean nothing happened. For
+    capital-structure changes (equity raises, dilution, buybacks, M&A) cross-check the primary
+    source — `filings(symbol, form_type="8-K")` — before acting on a name.
     """
     svc = services()
     try:
@@ -570,6 +577,12 @@ async def news_search(query: str, limit: int = 20, days: int = 7) -> dict:
     Unlike `news` (which needs a ticker), this searches worldwide coverage for any query — a
     thesis ("AI data center power"), an event, or a company name — over the last `days`. Returns
     articles (title, source, date, link) to read via `extract`. Capture only, no sentiment score.
+
+    NOT EXHAUSTIVE: this free feed can miss capital-structure events (equity raises, dilution,
+    buybacks, M&A). Do NOT rely on it alone to clear a name of such events — consult primary
+    filings via `filings(symbol, form_type="8-K")` / `filing_search` before an execution-grade
+    thesis. If `source_status` is set (e.g. "unavailable: rate_limited"), the source was
+    unreachable (429/timeout) — that is "couldn't fetch", NOT "no news"; retry or abstain.
     """
     svc = services()
     if svc.news_search is None:

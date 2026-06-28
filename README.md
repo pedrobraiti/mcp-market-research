@@ -86,7 +86,7 @@ return a clear "please set it" message; everything else works keyless.
 - `sector_performance(period?, as_of?)` — total return of each US sector (SPDR ETFs) — rotation.
 - `etf_holdings(symbol)` — an ETF's declared top holdings & sector weights (open a theme).
 - `filing_search(query, forms?, limit?)` — full-text search across **all** SEC filings → companies by what they disclose (thesis → names).
-- `news_search(query, limit?, days?)` — free-text news/event search across global media (**GDELT**).
+- `news_search(query, limit?, days?)` — free-text news/event search across global media (**GDELT**). Not exhaustive — it can miss capital-structure events (raises, dilution, buybacks, M&A); cross-check `filings(form_type="8-K")` / `filing_search` for those. On a 429/timeout it returns `source_status` (e.g. `unavailable: rate_limited`) so a "couldn't fetch" is distinguishable from "no matches".
 
 **Company deep-dive**
 - `company_dossier(symbol, depth?, as_of?)` — **flagship:** snapshot + fundamentals + dividends + technicals + earnings + analyst view + news, gathered **in parallel** (degrades gracefully).

@@ -40,6 +40,7 @@ from ...domain.models import (
     PriceBar,
     PriceHistory,
     QualityMetrics,
+    StockSplit,
     SymbolMatch,
     SymbolSearch,
 )
@@ -268,6 +269,7 @@ class YFinanceMarketData:
                 change_percent=_pct_change(price, previous_close),
                 sector=info.get("sector"),
                 industry=info.get("industry"),
+                recent_splits=_recent_splits(ticker, as_of),
                 as_of=as_of,
             )
 
@@ -291,6 +293,7 @@ class YFinanceMarketData:
             fifty_two_week_low=_dec(info.get("fiftyTwoWeekLow")),
             sector=info.get("sector"),
             industry=info.get("industry"),
+            recent_splits=_recent_splits(ticker, None),
             as_of=None,
         )
 
@@ -664,6 +667,33 @@ def _info(ticker: Any) -> dict:
     # that simply has no data returns a non-dict/empty payload, which becomes {} → unresolved.
     info = ticker.info
     return info if isinstance(info, dict) else {}
+
+
+def _recent_splits(ticker: Any, as_of: date | None, limit: int = 3) -> list[StockSplit]:
+    """Most recent stock splits (newest first), at or before ``as_of``.
+
+    yfinance exposes ``Ticker.splits`` (a date-indexed ratio series). It is supplementary
+    context — a transient failure or its absence must NEVER fail the snapshot — so every error
+    degrades to an empty list. Surfacing it lets a consumer see that, e.g., NFLX's post-10:1
+    price is correct-and-adjusted, not "wrong" against pre-split memory.
+    """
+    try:
+        series = getattr(ticker, "splits", None)
+        if series is None or len(series) == 0:
+            return []
+        splits: list[StockSplit] = []
+        for index_value, ratio in series.items():
+            split_date = _to_date(index_value)
+            value = _dec(ratio)
+            if split_date is None or value is None or value <= 0:
+                continue
+            if as_of is not None and split_date > as_of:
+                continue
+            splits.append(StockSplit(date=split_date, ratio=value))
+        splits.sort(key=lambda s: s.date, reverse=True)
+        return splits[:limit]
+    except Exception:  # noqa: BLE001 — splits is best-effort; never break the snapshot over it
+        return []
 
 
 def _currency(info: dict) -> str:

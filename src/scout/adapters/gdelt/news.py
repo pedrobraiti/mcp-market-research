@@ -15,6 +15,7 @@ from datetime import datetime
 from urllib.parse import quote
 
 from ...domain.models import WebNewsItem, WebNewsSearch
+from ..retry import SourceUnavailable, with_retry
 
 _DOC_URL = (
     "https://api.gdeltproject.org/api/v2/doc/doc?query={query}&mode=artlist&format=json"
@@ -36,8 +37,12 @@ class GdeltNewsSearch:
         self,
         fetch_json: Callable[[str], Awaitable[dict]] | None = None,
         timeout: float = 15.0,
+        retry_attempts: int = 3,
+        retry_base_delay: float = 0.5,
     ) -> None:
         self._timeout = timeout
+        self._retry_attempts = retry_attempts
+        self._retry_base_delay = retry_base_delay
         self._fetch_json = fetch_json or self._default_fetch_json
 
     async def _default_fetch_json(self, url: str) -> dict:
@@ -56,7 +61,16 @@ class GdeltNewsSearch:
         capped = max(1, min(limit, 75))
         days_window = max(1, min(days, 90))
         url = _DOC_URL.format(query=quote(clean), limit=capped, days=days_window)
-        data = await self._fetch_json(url)
+        try:
+            data = await with_retry(
+                lambda: self._fetch_json(url),
+                attempts=self._retry_attempts,
+                base_delay=self._retry_base_delay,
+            )
+        except SourceUnavailable as exc:
+            # A 429/timeout is "couldn't fetch", NOT "no news" — surface it so a downstream
+            # gate retries/abstains instead of treating an empty list as a real absence.
+            return WebNewsSearch(query=clean, items=[], source_status=exc.status)
         articles = (data or {}).get("articles") or []
         items: list[WebNewsItem] = []
         for article in articles[:capped]:

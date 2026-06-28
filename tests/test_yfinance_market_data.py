@@ -82,11 +82,20 @@ _DIVIDENDS = pd.Series(
 )
 
 
+_SPLITS = pd.Series(
+    {
+        pd.Timestamp("2014-06-09"): 7.0,
+        pd.Timestamp("2020-08-31"): 4.0,
+    }
+)
+
+
 class FakeTicker:
     def __init__(self, symbol: str) -> None:
         self.symbol = symbol
         self.info = _INFO
         self.dividends = _DIVIDENDS
+        self.splits = _SPLITS
         self.income_stmt = _INCOME
         self.quarterly_income_stmt = _INCOME
         self.balance_sheet = _BALANCE
@@ -169,6 +178,46 @@ async def test_snapshot_with_as_of_uses_history_close():
     assert snapshot.price == Decimal("223.5")
     assert snapshot.previous_close == Decimal("221.0")
     assert snapshot.as_of == date(2024, 6, 11)
+
+
+async def test_snapshot_surfaces_recent_splits_newest_first():
+    snapshot = await _source().get_snapshot("AAPL")
+    assert snapshot is not None
+    assert [s.date for s in snapshot.recent_splits] == [date(2020, 8, 31), date(2014, 6, 9)]
+    assert snapshot.recent_splits[0].ratio == Decimal("4.0")
+
+
+async def test_snapshot_as_of_filters_splits_after_date():
+    snapshot = await _source().get_snapshot("AAPL", as_of=date(2018, 1, 1))
+    assert snapshot is not None
+    assert [s.date for s in snapshot.recent_splits] == [date(2014, 6, 9)]
+
+
+async def test_snapshot_splits_empty_when_none():
+    class NoSplitsTicker(FakeTicker):
+        def __init__(self, symbol):
+            super().__init__(symbol)
+            self.splits = pd.Series(dtype=float)
+
+    snapshot = await YFinanceMarketData(ticker_factory=NoSplitsTicker).get_snapshot("AAPL")
+    assert snapshot is not None
+    assert snapshot.recent_splits == []
+
+
+async def test_snapshot_splits_failure_does_not_break_snapshot():
+    class BrokenSplitsTicker(FakeTicker):
+        @property
+        def splits(self):
+            raise RuntimeError("splits fetch blew up")
+
+        @splits.setter
+        def splits(self, value):
+            pass
+
+    snapshot = await YFinanceMarketData(ticker_factory=BrokenSplitsTicker).get_snapshot("AAPL")
+    assert snapshot is not None
+    assert snapshot.price == Decimal("230.0")
+    assert snapshot.recent_splits == []
 
 
 async def test_snapshot_unresolved_symbol_returns_none():
