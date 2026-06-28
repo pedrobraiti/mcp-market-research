@@ -62,6 +62,12 @@ _TOTAL_CASH = (
     "Cash And Cash Equivalents And Short Term Investments",
 )
 _FREE_CASH_FLOW = ("Free Cash Flow",)
+_TOTAL_ASSETS = ("Total Assets",)
+_STOCKHOLDERS_EQUITY = (
+    "Stockholders Equity",
+    "Total Stockholder Equity",
+    "Common Stock Equity",
+)
 
 
 def _default_ticker_factory(symbol: str) -> Any:
@@ -133,6 +139,24 @@ def _ratio(numerator: Decimal | None, denominator: Decimal | None, places: int) 
     if numerator is None or denominator is None or denominator == 0:
         return None
     return _quantize(numerator / denominator, places)
+
+
+def _ratio_pos(
+    numerator: Decimal | None, denominator: Decimal | None, places: int
+) -> Decimal | None:
+    """Ratio only when the denominator is strictly positive. A negative denominator makes the
+    ratio meaningless for ranking (e.g. EV/EBIT with negative EBIT, debt/FCF with negative FCF)."""
+    if denominator is None or denominator <= 0:
+        return None
+    return _ratio(numerator, denominator, places)
+
+
+def _diff(a: Decimal | None, b: Decimal | None) -> Decimal | None:
+    return None if a is None or b is None else a - b
+
+
+def _add(a: Decimal | None, b: Decimal | None) -> Decimal | None:
+    return None if a is None or b is None else a + b
 
 
 class YFinanceMarketData:
@@ -316,6 +340,19 @@ class YFinanceMarketData:
         net_income = _row(income, column, *_NET_INCOME)
         balance_col = _pick_column(balance, as_of)
         cash_col = _pick_column(cash, as_of)
+        total_debt = _row(balance, balance_col, *_TOTAL_DEBT) if balance_col else None
+        total_cash = _row(balance, balance_col, *_TOTAL_CASH) if balance_col else None
+        total_assets = _row(balance, balance_col, *_TOTAL_ASSETS) if balance_col else None
+        equity = _row(balance, balance_col, *_STOCKHOLDERS_EQUITY) if balance_col else None
+        free_cash_flow = _row(cash, cash_col, *_FREE_CASH_FLOW) if cash_col else None
+
+        # Market cap only on a live read: the source has no historical cap to pair with a past
+        # statement, so cap-based valuation would silently mix "today" with an old fiscal period.
+        market_cap = _dec(_info(ticker).get("marketCap")) if as_of is None else None
+
+        net_debt = _diff(total_debt, total_cash)
+        enterprise_value = _add(market_cap, net_debt)  # = market_cap + total_debt − total_cash
+        invested_capital = _diff(_add(total_debt, equity), total_cash)
         return Fundamentals(
             symbol=symbol,
             period=period,
@@ -327,9 +364,23 @@ class YFinanceMarketData:
             gross_margin=_ratio(gross_profit, revenue, 6),
             operating_margin=_ratio(operating_income, revenue, 6),
             net_margin=_ratio(net_income, revenue, 6),
-            total_debt=_row(balance, balance_col, *_TOTAL_DEBT) if balance_col else None,
-            total_cash=_row(balance, balance_col, *_TOTAL_CASH) if balance_col else None,
-            free_cash_flow=_row(cash, cash_col, *_FREE_CASH_FLOW) if cash_col else None,
+            total_debt=total_debt,
+            total_cash=total_cash,
+            total_assets=total_assets,
+            stockholders_equity=equity,
+            free_cash_flow=free_cash_flow,
+            market_cap=market_cap,
+            net_debt=_quantize(net_debt, 2),
+            net_debt_to_fcf=_ratio_pos(net_debt, free_cash_flow, 2),
+            fcf_margin=_ratio(free_cash_flow, revenue, 6),
+            fcf_yield=_ratio(free_cash_flow, market_cap, 6),
+            earnings_yield=_ratio(net_income, market_cap, 6),
+            enterprise_value=_quantize(enterprise_value, 2),
+            ev_to_ebit=_ratio_pos(enterprise_value, operating_income, 4),
+            ev_to_sales=_ratio_pos(enterprise_value, revenue, 4),
+            ebit_to_ev=_ratio_pos(operating_income, enterprise_value, 4),
+            gross_profitability=_ratio_pos(gross_profit, total_assets, 6),
+            roic_pretax=_ratio_pos(operating_income, invested_capital, 6),
             as_of=as_of,
         )
 
@@ -456,7 +507,34 @@ class YFinanceMarketData:
                 if next_date is None or event_date < next_date:
                     next_date = event_date
         events.sort(key=lambda e: e.event_date or date.min)
-        return EarningsInfo(symbol=symbol, next_earnings_date=next_date, events=events)
+
+        past = [e for e in events if not e.is_future and e.surprise_percent is not None]
+        beat_rate = avg_surprise = consistency = None
+        if past:
+            surprises = [float(e.surprise_percent) for e in past]
+            beat_rate = _quantize(_dec(sum(1 for s in surprises if s > 0) / len(surprises)), 4)
+            mean_surprise = sum(surprises) / len(surprises)
+            avg_surprise = _quantize(_dec(mean_surprise), 4)
+            if len(surprises) >= 3:
+                variance = sum((s - mean_surprise) ** 2 for s in surprises) / (len(surprises) - 1)
+                consistency = _quantize(_dec(variance**0.5), 4)
+        streak = 0
+        for event in reversed(events):  # newest first (events are oldest→newest)
+            if event.is_future:
+                continue
+            if event.surprise_percent is not None and event.surprise_percent > 0:
+                streak += 1
+            else:
+                break
+        return EarningsInfo(
+            symbol=symbol,
+            next_earnings_date=next_date,
+            beat_rate=beat_rate,
+            surprise_streak=streak if past else None,
+            avg_surprise=avg_surprise,
+            surprise_consistency=consistency,
+            events=events,
+        )
 
     def _movers_sync(self, category: str, limit: int) -> MoversList:
         predefined = _MOVER_CATEGORIES.get(category)
@@ -626,16 +704,22 @@ class YFinanceMarketData:
         info = _info(self._ticker_factory(symbol))
         if not info:
             return None
+        current_price = _dec(info.get("currentPrice") or info.get("regularMarketPrice"))
+        target_mean = _dec(info.get("targetMeanPrice"))
+        target_high = _dec(info.get("targetHighPrice"))
+        target_low = _dec(info.get("targetLowPrice"))
         return AnalystView(
             symbol=symbol,
             recommendation_key=info.get("recommendationKey"),
             recommendation_mean=_dec(info.get("recommendationMean")),
             number_of_analysts=_int(info.get("numberOfAnalystOpinions")),
-            current_price=_dec(info.get("currentPrice") or info.get("regularMarketPrice")),
-            target_mean=_dec(info.get("targetMeanPrice")),
+            current_price=current_price,
+            target_mean=target_mean,
             target_median=_dec(info.get("targetMedianPrice")),
-            target_high=_dec(info.get("targetHighPrice")),
-            target_low=_dec(info.get("targetLowPrice")),
+            target_high=target_high,
+            target_low=target_low,
+            upside_pct=_ratio(_diff(target_mean, current_price), current_price, 6),
+            target_dispersion=_ratio_pos(_diff(target_high, target_low), target_mean, 6),
         )
 
     def _history_closes(self, ticker: Any, as_of: date) -> tuple[Decimal | None, Decimal | None]:

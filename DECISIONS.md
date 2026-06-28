@@ -128,3 +128,36 @@ and auditable, and the agent never has to re-derive YoY/real-rate/Sahm math from
 - **Deferred (M2b), not pretended.** Breakeven inflation (`T10YIE`), ex-ante real yield (`DFII10`)
   and the high-yield credit spread (`BAMLH0A0HYM2`) are high-value FRED series left for a follow-up
   — they are new raw inputs more than transforms of existing data.
+
+---
+
+## ADR-008 — Derive valuation/solvency/quality from statements already fetched
+
+**Decision.** `fundamentals` returns a derived block (net debt & net-debt/FCF, FCF margin,
+gross profitability, pretax ROIC, and — on a live read — FCF & earnings yield, enterprise value,
+EV/EBIT, EV/Sales, EBIT/EV); `analyst_view` adds upside % and target dispersion; `earnings` adds
+beat rate, surprise streak, average surprise and surprise consistency.
+
+**Why.** Same thread as ADR-006/007: the inputs were already in hand and discarded. The balance
+sheet was being loaded but only debt and cash were read — total assets and equity (needed for
+gross profitability and ROIC) were one `_row` call away. Analyst targets and the earnings-surprise
+history were returned raw, leaving the agent to recompute upside, dispersion and beat-streaks every
+time. Doing it once in the data layer is correct, auditable and free.
+
+**Choices that matter.**
+- **No silent cap mismatch.** Market-cap-based ratios (FCF yield, EV multiples, earnings yield) are
+  computed only on a *live* read (`as_of` is None). The source exposes only the *current* market
+  cap; pairing it with a past statement on a point-in-time read would mix "today" with an old
+  period, so those fields are deliberately null there. Statement-only ratios (net-debt/FCF, gross
+  profitability, ROIC) are always available.
+- **Positive-denominator guard.** Ratios where a negative denominator inverts the meaning
+  (EV/EBIT with negative EBIT, debt/FCF with negative FCF, ROIC with negative invested capital) use
+  a strict `>0` guard and return null otherwise — a missing number beats a misleading one.
+- **EBIT ≈ operating income; ROIC is pretax.** Without D&A or the effective tax rate in the fetched
+  set, EV/EBITDA and after-tax ROIC are not claimed (ADR-style honesty). EV/EBIT and pretax ROIC are
+  the closest honest substitutes; the field names say so.
+- **Measures, not a rating (ADR-004).** It reports a 97% ROIC and an 11% upside; it never says
+  "high quality" or "buy".
+- **Deferred (M3b).** Piotroski/Altman/Beneish and EV/EBITDA need inputs not yet fetched (current
+  assets/liabilities, retained earnings, D&A, interest expense) — left for a follow-up rather than
+  approximated past the point of meaning.

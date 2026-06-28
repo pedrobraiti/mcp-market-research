@@ -64,6 +64,8 @@ _BALANCE = pd.DataFrame(
         pd.Timestamp("2024-09-30"): {
             "Total Debt": 106_629_000_000.0,
             "Cash And Cash Equivalents": 29_943_000_000.0,
+            "Total Assets": 364_980_000_000.0,
+            "Stockholders Equity": 56_950_000_000.0,
         }
     }
 )
@@ -277,11 +279,32 @@ async def test_fundamentals_picks_latest_period_and_derives_margins():
     assert Decimal("0.46") < fundamentals.gross_margin < Decimal("0.47")
 
 
+async def test_fundamentals_derived_valuation_solvency_quality():
+    f = await _source().get_fundamentals("AAPL")  # live read → market-cap metrics populate
+    assert f is not None
+    # Solvency (statement-only, no market cap needed).
+    assert f.net_debt == Decimal("76686000000")  # 106.629B debt − 29.943B cash
+    assert f.net_debt_to_fcf == Decimal("0.70")
+    assert f.gross_profitability is not None  # 180.683B / 364.980B ≈ 0.495
+    assert Decimal("0.49") < f.gross_profitability < Decimal("0.50")
+    assert f.roic_pretax is not None and f.roic_pretax > Decimal("0.9")
+    # Valuation (needs the current market cap from the live read).
+    assert f.market_cap == Decimal("3500000000000")
+    assert f.enterprise_value == Decimal("3576686000000")  # cap + net_debt
+    assert f.ev_to_ebit is not None and Decimal("29") < f.ev_to_ebit < Decimal("30")
+    assert f.fcf_yield is not None and Decimal("0.030") < f.fcf_yield < Decimal("0.032")
+
+
 async def test_fundamentals_as_of_selects_older_period():
     fundamentals = await _source().get_fundamentals("AAPL", as_of=date(2023, 12, 31))
     assert fundamentals is not None
     assert fundamentals.fiscal_period_end == date(2023, 9, 30)
     assert fundamentals.revenue == Decimal("383285000000")
+    # A point-in-time read pairs no current market cap with the old statement → cap metrics null.
+    assert fundamentals.market_cap is None
+    assert fundamentals.enterprise_value is None
+    assert fundamentals.fcf_yield is None
+    assert fundamentals.ev_to_ebit is None
 
 
 async def test_dividends_streak_and_no_cut():
@@ -363,6 +386,11 @@ async def test_earnings_splits_future_and_past():
     past = [e for e in info.events if not e.is_future]
     assert any(e.event_date == date(2026, 8, 1) for e in future)
     assert any(e.eps_reported == Decimal("1.46") for e in past)
+    # The one past print beat (surprise 4.3%) → full beat rate and a one-print streak.
+    assert info.beat_rate == Decimal("1.0000")
+    assert info.surprise_streak == 1
+    assert info.avg_surprise == Decimal("4.3000")
+    assert info.surprise_consistency is None  # needs ≥3 prints for a stdev
 
 
 async def test_analyst_view_reports_consensus():
@@ -372,6 +400,12 @@ async def test_analyst_view_reports_consensus():
     assert view.number_of_analysts == 35
     assert view.target_mean == Decimal("290.0")
     assert view.target_high == Decimal("340.0")
+    # Derived: (290 − 230)/230 ≈ 0.261 upside; (340 − 200)/290 ≈ 0.483 dispersion.
+    assert view.upside_pct is not None and Decimal("0.26") < view.upside_pct < Decimal("0.27")
+    assert (
+        view.target_dispersion is not None
+        and Decimal("0.48") < view.target_dispersion < Decimal("0.49")
+    )
 
 
 async def test_options_volatility_expected_move():

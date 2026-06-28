@@ -263,9 +263,13 @@ async def fundamentals(symbol: str, period: str = "annual", as_of: str | None = 
     """Core fundamentals for a US company: income, balance-sheet and cash-flow figures.
 
     `period` is "annual" or "quarterly". Returns revenue, gross/operating income, net income,
-    derived gross/operating/net margins, total debt, total cash and free cash flow, for the
-    latest fiscal period at or before `as_of` (YYYY-MM-DD; omit for the latest). `data` is null
-    if no statements are available for the symbol.
+    margins, total debt/cash/assets, stockholders' equity and free cash flow, for the latest
+    fiscal period at or before `as_of`, plus a derived valuation/solvency/quality block:
+    net_debt and net_debt_to_fcf, fcf_margin, gross_profitability (Novy-Marx) and pretax ROIC —
+    and, on a live read (no `as_of`, paired with current market cap), FCF & earnings yield,
+    enterprise value and EV/EBIT, EV/Sales, EBIT/EV. Each derived field is null when an input is
+    missing or its denominator isn't positive (so a value never silently misleads). Raw numbers,
+    not a rating. `data` is null if no statements are available. (`as_of` is YYYY-MM-DD.)
     """
     svc = services()
     try:
@@ -409,8 +413,11 @@ async def earnings(symbol: str, as_of: str | None = None) -> dict:
     """Earnings calendar and history for a US company.
 
     Returns the next earnings date and past events with EPS estimate, reported EPS and the
-    surprise %. Pass `as_of` (YYYY-MM-DD) to treat that date as "now" when splitting
-    upcoming vs past. Useful to know if a binary event is near before acting on a name.
+    surprise %, plus derived consistency measures over past prints: beat_rate (share that beat),
+    surprise_streak (consecutive most-recent beats), avg_surprise and surprise_consistency (stdev
+    of the surprise — lower is steadier/more predictable). Pass `as_of` (YYYY-MM-DD) to treat that
+    date as "now" when splitting upcoming vs past. Useful to know if a binary event is near, and
+    how reliably the company has cleared the bar, before acting on a name.
     """
     svc = services()
     try:
@@ -477,7 +484,9 @@ async def analyst_view(symbol: str) -> dict:
     """Sell-side analyst consensus and price targets for a US stock.
 
     Returns the consensus recommendation (key + mean, 1=strong buy … 5=sell), the number of
-    analysts, and mean/median/high/low price targets vs the current price. This is **what
+    analysts, and mean/median/high/low price targets vs the current price, plus derived
+    upside_pct (mean target vs current price) and target_dispersion (high-low spread over the
+    mean — low = tight consensus/high conviction, wide = disagreement). This is **what
     third-party analysts say, reported as data** — not Scout's recommendation; you weigh it.
     """
     svc = services()

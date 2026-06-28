@@ -107,7 +107,23 @@ class Fundamentals(BaseModel):
     net_margin: Decimal | None = None
     total_debt: Decimal | None = None
     total_cash: Decimal | None = None
+    total_assets: Decimal | None = None
+    stockholders_equity: Decimal | None = None
     free_cash_flow: Decimal | None = None
+    market_cap: Decimal | None = None  # current market cap; only set on a live read (as_of=None)
+    # --- Derived (raw-number measures, no verdict). Cap-based ones are live-read only, because
+    # the source has no historical market cap to pair with a past statement. ---
+    net_debt: Decimal | None = None  # total_debt − total_cash (negative = net cash position)
+    net_debt_to_fcf: Decimal | None = None  # years of FCF to clear net debt (null if FCF ≤ 0)
+    fcf_margin: Decimal | None = None  # free_cash_flow / revenue
+    fcf_yield: Decimal | None = None  # free_cash_flow / market_cap (live read only)
+    earnings_yield: Decimal | None = None  # net_income / market_cap (live read only)
+    enterprise_value: Decimal | None = None  # market_cap + total_debt − total_cash (live read only)
+    ev_to_ebit: Decimal | None = None  # EV / operating_income (EBIT proxy; null if EBIT ≤ 0)
+    ev_to_sales: Decimal | None = None  # EV / revenue
+    ebit_to_ev: Decimal | None = None  # operating_income / EV (Greenblatt-style earnings yield)
+    gross_profitability: Decimal | None = None  # gross_profit / total_assets (Novy-Marx quality)
+    roic_pretax: Decimal | None = None  # operating_income / (total_debt + equity − cash)
     as_of: date | None = None
 
 
@@ -415,6 +431,10 @@ class EarningsInfo(BaseModel):
 
     symbol: str
     next_earnings_date: date | None = None
+    beat_rate: Decimal | None = None  # fraction of past prints that beat the estimate (0..1)
+    surprise_streak: int | None = None  # consecutive most-recent prints that beat
+    avg_surprise: Decimal | None = None  # mean surprise_percent across past prints
+    surprise_consistency: Decimal | None = None  # stdev of surprise_percent (lower = steadier)
     events: list[EarningsEvent] = []
 
 
@@ -432,6 +452,8 @@ class AnalystView(BaseModel):
     target_median: Decimal | None = None
     target_high: Decimal | None = None
     target_low: Decimal | None = None
+    upside_pct: Decimal | None = None  # (target_mean − current_price) / current_price
+    target_dispersion: Decimal | None = None  # (high − low) / mean — analyst disagreement
 
 
 class QualityMetrics(BaseModel):

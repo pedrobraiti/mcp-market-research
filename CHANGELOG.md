@@ -54,6 +54,17 @@ dates anchor the entries.
   the **Sahm recession gap** (+ signal), **VIX z-score & percentile** vs its ~1y window, **yield-curve
   inversion** (+ consecutive observations inverted), and a **12-month recession probability** (NY-Fed
   Estrella-Mishkin term-spread probit, via stdlib `math.erf`). Stays measures-not-verdicts. See ADR-007.
+- **Derived fundamentals layer** on `fundamentals`, `analyst_view` and `earnings`, from figures
+  already fetched (the balance sheet was loaded but total assets / equity went unread; the option
+  chain analogue here is the raw statement). `fundamentals` now also surfaces total assets,
+  stockholders' equity and (on a live read) market cap, plus: **net_debt**, **net_debt_to_fcf**,
+  **fcf_margin**, **gross_profitability** (Novy-Marx) and **pretax ROIC** (statement-only), and —
+  paired with current market cap on a live read — **FCF & earnings yield**, **enterprise value**
+  and **EV/EBIT, EV/Sales, EBIT/EV** (Greenblatt). `analyst_view` adds **upside_pct** and
+  **target_dispersion** (consensus tightness). `earnings` adds **beat_rate**, **surprise_streak**,
+  **avg_surprise** and **surprise_consistency**. Cap-based ratios are null on a point-in-time
+  (`as_of`) read — the source has no historical market cap to pair with a past statement — and any
+  ratio is null when its denominator isn't positive. See ADR-008.
 - Resilience: retry/backoff on yfinance, and a transparent **stooq fallback** for price history so
   a yfinance failure doesn't lose data.
 - 145 offline tests; live-validated against every source.
