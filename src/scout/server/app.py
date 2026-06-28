@@ -873,9 +873,12 @@ async def crypto_movers(category: str = "gainers", limit: int = 20) -> dict:
 async def crypto_order_book(symbol: str, limit: int = 20) -> dict:
     """Order-book top-of-book and aggregated depth for a pair — a pre-trade liquidity/slippage read.
 
-    Returns best bid/ask, the spread (absolute & %), aggregated base-asset depth per side and the
-    top levels. Use it to judge whether a pair is liquid enough to size into without bad slippage —
-    e.g. before a market buy. `data` is null if no book is returned. Raw microstructure, not a call.
+    Returns best bid/ask, the spread (absolute & %), aggregated base-asset depth per side, the top
+    levels, and two derived microstructure measures: `imbalance` ((bid−ask depth)/(bid+ask), −1..1
+    — short-horizon directional pressure) and `microprice` (size-weighted fair price that leans to
+    the thinner side, a better next-trade estimate than the mid). Use it to judge whether a pair is
+    liquid enough to size into without bad slippage. `data` is null if no book is returned. Raw
+    microstructure, not a call.
     """
     svc = services()
     if svc.crypto_market_data is None:
@@ -973,8 +976,11 @@ async def crypto_derivatives(symbol: str) -> dict:
     """Perp funding rate & open interest across exchanges — positioning CONTEXT (never executed).
 
     For a base asset (e.g. "BTC"), returns per-venue (Binance, Bybit, OKX) the perpetual funding
-    rate, next funding time, mark price and open interest. High positive funding = crowded longs;
-    rising OI = leverage building. Execution is spot-only, so this is sentiment only — not a trade.
+    rate, its annualized form, next funding time, mark price and open interest (incl. USD value),
+    plus cross-venue aggregates: OI-weighted funding consensus (annualized too), funding dispersion
+    across venues (a stress/arbitrage signal) and total OI in USD. High positive funding = crowded
+    longs; rising OI = leverage building. Annualized figures assume an 8h funding interval (the
+    venues' default). Execution is spot-only, so this is sentiment only — not a trade.
     """
     svc = services()
     if svc.crypto_derivatives is None:

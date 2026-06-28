@@ -149,3 +149,19 @@ async def test_order_book_spread_and_depth():
     assert book.bid_depth_base == Decimal("5.0")  # 2 + 3
     assert book.ask_depth_base == Decimal("5.0")  # 1 + 4
     assert book.levels == 2
+    assert book.imbalance == Decimal("0.0000")  # balanced depth → no directional pressure
+    # microprice = (bid*ask_size + ask*bid_size)/(bid_size+ask_size) = (100*1 + 101*2)/3
+    assert book.microprice == Decimal("100.66666667")
+
+
+async def test_order_book_imbalance_and_microprice_asymmetric():
+    async def fetch_order_book(symbol: str, limit: int) -> dict:
+        return {
+            "bids": [[100.0, 8.0], [99.0, 2.0]],  # heavy bid depth (10)
+            "asks": [[101.0, 1.0], [102.0, 1.0]],  # thin ask depth (2)
+        }
+
+    book = await CcxtMarketData(fetch_order_book=fetch_order_book).get_order_book("BTC/USDT")
+    assert book.imbalance == Decimal("0.6667")  # (10 − 2) / 12 → strong bid-side pressure
+    # microprice leans toward the thin ask: (100*1 + 101*8)/(8+1) = 908/9 ≈ 100.889 > mid 100.5
+    assert book.microprice == Decimal("100.88888889")

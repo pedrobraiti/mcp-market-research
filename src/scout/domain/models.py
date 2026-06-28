@@ -799,10 +799,11 @@ class DerivativesVenue(BaseModel):
     exchange: str
     symbol: str | None = None
     funding_rate: Decimal | None = None
+    funding_rate_annualized: Decimal | None = None  # funding × 3/day × 365 (assumes 8h interval)
     next_funding_time: datetime | None = None
     mark_price: Decimal | None = None
     open_interest: Decimal | None = None
-    open_interest_value: Decimal | None = None
+    open_interest_value: Decimal | None = None  # OI in USD (already normalized per venue)
 
 
 class CryptoDerivatives(BaseModel):
@@ -814,6 +815,11 @@ class CryptoDerivatives(BaseModel):
 
     base: str
     venues: list[DerivativesVenue] = []
+    # Cross-venue positioning, derived from the venues above (raw measures, not a verdict):
+    funding_oi_weighted: Decimal | None = None  # Σ(funding × OI_usd) / Σ(OI_usd) — real consensus
+    funding_annualized_oi_weighted: Decimal | None = None  # the same, annualized (8h assumption)
+    funding_dispersion: Decimal | None = None  # max − min funding across venues (stress/arb signal)
+    total_open_interest_value: Decimal | None = None  # Σ OI in USD across venues
     note: str | None = None
 
 
@@ -950,6 +956,8 @@ class CryptoOrderBook(BaseModel):
     spread_percent: Decimal | None = None
     bid_depth_base: Decimal | None = None
     ask_depth_base: Decimal | None = None
+    imbalance: Decimal | None = None  # (bid − ask depth)/(bid + ask), −1..1; directional pressure
+    microprice: Decimal | None = None  # size-weighted fair price (leans to the thinner side)
     levels: int | None = None
     top_bids: list[OrderBookLevel] = []
     top_asks: list[OrderBookLevel] = []

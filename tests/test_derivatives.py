@@ -45,6 +45,22 @@ async def test_aggregates_three_venues():
     assert venues["okx"].open_interest_value == Decimal("300000000")
 
 
+async def test_derived_funding_annualized_and_cross_venue():
+    result = await DerivativesAggregator(fetch_json=_fetch).get_derivatives("BTC")
+    venues = {v.exchange: v for v in result.venues}
+    # Per-venue annualization at the 8h default: 0.00004111 × 3 × 365.
+    assert venues["binance"].funding_rate_annualized == Decimal("0.045015")
+    # OI-weighted consensus sits between the venues' funding rates.
+    assert result.funding_oi_weighted is not None
+    assert Decimal("0.00003") < result.funding_oi_weighted < Decimal("0.00005")
+    assert result.funding_annualized_oi_weighted is not None
+    # Dispersion = max − min funding = 0.00005 − 0.00003.
+    assert result.funding_dispersion == Decimal("0.00002000")
+    # Total OI in USD = 600,000,000 + 480,080,000 + 300,000,000.
+    assert result.total_open_interest_value == Decimal("1380080000.00")
+    assert result.note is not None and "8h" in result.note
+
+
 async def test_partial_failure_drops_only_that_venue():
     async def flaky(url: str):
         if "bybit.com" in url:

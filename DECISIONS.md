@@ -161,3 +161,33 @@ time. Doing it once in the data layer is correct, auditable and free.
 - **Deferred (M3b).** Piotroski/Altman/Beneish and EV/EBITDA need inputs not yet fetched (current
   assets/liabilities, retained earnings, D&A, interest expense) — left for a follow-up rather than
   approximated past the point of meaning.
+
+---
+
+## ADR-009 — Derive crypto positioning/microstructure from data already fetched
+
+**Decision.** `crypto_derivatives` adds a per-venue annualized funding rate and cross-venue
+aggregates (OI-weighted funding consensus + annualized, funding dispersion, total OI in USD);
+`crypto_order_book` adds order-book imbalance and microprice.
+
+**Why.** The funding rate, per-venue open interest and the full top-of-book were already fetched
+and handed over raw. A `0.00001` funding rate means nothing until annualized (~1%/yr); a trader
+needs the *consensus* across venues, not three numbers to average by hand; and the order book
+already carried the depth and sizes needed for imbalance and microprice. Same principle as
+ADR-006/007/008 — compute once, in the data layer, measures not verdicts.
+
+**Choices that matter.**
+- **OI normalization was already solved.** Cross-venue funding must be weighted by open interest
+  in a common unit, and venues report OI in different units (coin vs USD). The adapter already
+  computes per-venue `open_interest_value` in USD, so the weighting and the total use that — no
+  silent unit-mixing (the classic OI-aggregation bug).
+- **8h funding interval, assumed and flagged.** A single `next_funding_time` snapshot cannot reveal
+  whether a venue settles every 8h/4h/1h. Binance/Bybit/OKX default to 8h, so annualization uses
+  3×/day and the `note` says so — an explicit assumption beats an unreliable guess from one stamp.
+- **Microprice leans to the thin side.** `(bid·ask_size + ask·bid_size)/(bid_size+ask_size)` puts
+  more weight on the side with *less* size, which is the better estimate of the next trade price
+  than the plain mid — useful for execution and for reading short-horizon pressure alongside
+  `imbalance`.
+- **Deferred (M5b).** Perp basis needs a spot price (cross-source) and the long/short build-up read
+  needs ΔOI (two snapshots in time) — the latter breaks statelessness (ADR-003), so both are left
+  out rather than faked.

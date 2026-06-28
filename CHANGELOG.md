@@ -65,6 +65,15 @@ dates anchor the entries.
   **avg_surprise** and **surprise_consistency**. Cap-based ratios are null on a point-in-time
   (`as_of`) read — the source has no historical market cap to pair with a past statement — and any
   ratio is null when its denominator isn't positive. See ADR-008.
+- **Derived crypto microstructure/derivatives layer** on `crypto_derivatives` and
+  `crypto_order_book`, from data already fetched and discarded. `crypto_derivatives` now adds a
+  per-venue **annualized funding rate** and cross-venue aggregates: **OI-weighted funding
+  consensus** (and annualized), **funding dispersion** across venues (a stress/arbitrage signal)
+  and **total open interest in USD** (using the per-venue USD OI the adapter already computes, so
+  no unit-mismatch). `crypto_order_book` adds **imbalance** ((bid−ask depth)/(bid+ask)) and
+  **microprice** (size-weighted fair price). Annualized funding assumes the venues' 8h interval
+  (a single next-funding snapshot can't reveal the true interval) and flags it in `note`. See
+  ADR-009.
 - Resilience: retry/backoff on yfinance, and a transparent **stooq fallback** for price history so
   a yfinance failure doesn't lose data.
 - 145 offline tests; live-validated against every source.

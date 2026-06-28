@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from ...domain.models import (
@@ -240,6 +240,25 @@ class CcxtMarketData:
         spread_pct = (
             (spread / mid * 100) if spread is not None and mid not in (None, Decimal(0)) else None
         )
+        bid_depth = sum((_dec(lvl[1]) or Decimal(0)) for lvl in bids) or None
+        ask_depth = sum((_dec(lvl[1]) or Decimal(0)) for lvl in asks) or None
+        imbalance = None
+        if bid_depth is not None and ask_depth is not None and (bid_depth + ask_depth) > 0:
+            imbalance = ((bid_depth - ask_depth) / (bid_depth + ask_depth)).quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP
+            )
+        # Microprice: the mid pulled toward the side with LESS size at the top of book — a better
+        # estimate of the next trade price than the plain mid.
+        best_bid_amt = _dec(bids[0][1]) if bids else None
+        best_ask_amt = _dec(asks[0][1]) if asks else None
+        microprice = None
+        if (
+            None not in (best_bid, best_ask, best_bid_amt, best_ask_amt)
+            and (best_bid_amt + best_ask_amt) > 0
+        ):
+            microprice = (
+                (best_bid * best_ask_amt + best_ask * best_bid_amt) / (best_bid_amt + best_ask_amt)
+            ).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
         return CryptoOrderBook(
             symbol=pair,
             exchange=self._exchange,
@@ -247,8 +266,10 @@ class CcxtMarketData:
             ask=best_ask,
             spread=spread,
             spread_percent=spread_pct,
-            bid_depth_base=sum((_dec(lvl[1]) or Decimal(0)) for lvl in bids) or None,
-            ask_depth_base=sum((_dec(lvl[1]) or Decimal(0)) for lvl in asks) or None,
+            bid_depth_base=bid_depth,
+            ask_depth_base=ask_depth,
+            imbalance=imbalance,
+            microprice=microprice,
             levels=max(len(bids), len(asks)),
             top_bids=[OrderBookLevel(price=_dec(lvl[0]), amount=_dec(lvl[1])) for lvl in bids[:10]],
             top_asks=[OrderBookLevel(price=_dec(lvl[0]), amount=_dec(lvl[1])) for lvl in asks[:10]],
