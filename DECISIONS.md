@@ -125,9 +125,11 @@ and auditable, and the agent never has to re-derive YoY/real-rate/Sahm math from
 - **Pure-Python, stdlib only.** The probit's normal CDF uses `math.erf`; no scipy. Generic stats
   (z-score, percentile, Sahm, probit) live in `analytics.py`; only the date alignment lives in the
   adapter. Stateless is preserved — everything is computed from a single on-demand read.
-- **Deferred (M2b), not pretended.** Breakeven inflation (`T10YIE`), ex-ante real yield (`DFII10`)
-  and the high-yield credit spread (`BAMLH0A0HYM2`) are high-value FRED series left for a follow-up
-  — they are new raw inputs more than transforms of existing data.
+- **Followed up (was M2b).** Breakeven inflation (`T10YIE`), ex-ante real yield (`DFII10`) and the
+  high-yield credit spread (`BAMLH0A0HYM2`) were later added: they surface as raw indicators and as
+  derived fields (`inflation_expectations_10y`, `real_10y_exante`, `credit_spread_hy` + its z-score
+  for the stress regime). The credit-spread z-score is the derived-math win — HY OAS widens before
+  equities fall, so its regime read is high-value.
 
 ---
 

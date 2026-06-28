@@ -13,6 +13,9 @@ _CSV = {
     "UNRATE": "DATE,UNRATE\n2026-05-01,4.3\n",
     "CPIAUCSL": "DATE,CPIAUCSL\n2026-05-01,322.1\n",
     "VIXCLS": "DATE,VIXCLS\n2026-06-25,18.4\n",
+    "T10YIE": "DATE,T10YIE\n2026-06-25,2.35\n",
+    "DFII10": "DATE,DFII10\n2026-06-25,2.05\n",
+    "BAMLH0A0HYM2": "DATE,BAMLH0A0HYM2\n2026-06-25,3.10\n",
 }
 
 
@@ -27,7 +30,7 @@ def _fetch_factory(store=_CSV):
 async def test_returns_all_series_latest():
     snapshot = await FredMacro(fetch_csv=_fetch_factory()).get_macro_context()
     by_id = {i.series_id: i for i in snapshot.indicators}
-    assert len(snapshot.indicators) == 8
+    assert len(snapshot.indicators) == 11
     assert by_id["FEDFUNDS"].value == Decimal("3.63")
     # The latest DGS10 row is valid; the dot row before it is skipped.
     assert by_id["DGS10"].value == Decimal("4.47")
@@ -53,7 +56,7 @@ async def test_partial_failure_drops_only_that_series():
     ids = {i.series_id for i in snapshot.indicators}
     assert "VIXCLS" not in ids
     assert "FEDFUNDS" in ids
-    assert len(snapshot.indicators) == 7
+    assert len(snapshot.indicators) == 10
 
 
 class _Resp:
@@ -130,6 +133,10 @@ _RICH_CSV = {
     "T10Y2Y": _daily_csv("T10Y2Y", _END, [0.3, 0.2, 0.1, -0.05, -0.1, -0.2]),
     # VIX flat then a spike on the latest print → high z-score, top of its window.
     "VIXCLS": _daily_csv("VIXCLS", _END, [15.0] * 39 + [30.0]),
+    "T10YIE": _daily_csv("T10YIE", _END, [2.30, 2.35]),
+    "DFII10": _daily_csv("DFII10", _END, [2.00, 2.05]),
+    # Credit spread flat then a blowout on the latest print → high z-score (stress).
+    "BAMLH0A0HYM2": _daily_csv("BAMLH0A0HYM2", _END, [3.0] * 39 + [6.0]),
 }
 
 
@@ -155,6 +162,11 @@ async def test_derived_regime_metrics():
     assert d.recession_prob_12m is not None
     assert Decimal("31.0") <= d.recession_prob_12m <= Decimal("33.0")
     assert any("recession_prob_12m" in note for note in d.notes)
+    # New FRED series: breakeven, ex-ante real yield, and the credit-spread stress regime.
+    assert d.inflation_expectations_10y == Decimal("2.35")
+    assert d.real_10y_exante == Decimal("2.05")
+    assert d.credit_spread_hy == Decimal("6.0")  # latest (blowout) print
+    assert d.credit_spread_hy_zscore is not None and d.credit_spread_hy_zscore > 2
 
 
 async def test_derived_is_empty_when_series_too_short():

@@ -54,6 +54,10 @@ dates anchor the entries.
   the **Sahm recession gap** (+ signal), **VIX z-score & percentile** vs its ~1y window, **yield-curve
   inversion** (+ consecutive observations inverted), and a **12-month recession probability** (NY-Fed
   Estrella-Mishkin term-spread probit, via stdlib `math.erf`). Stays measures-not-verdicts. See ADR-007.
+- **Macro layer extended** with three more FRED series and their reads: 10y **breakeven inflation**
+  (`T10YIE` → market-expected CPI), the 10y **TIPS real yield** (`DFII10` → ex-ante real rate), and
+  the US **high-yield credit spread** (`BAMLH0A0HYM2`) with a **z-score** vs its ~1y window — a
+  financial-stress gauge that often widens before equities fall. See ADR-007.
 - **Derived fundamentals layer** on `fundamentals`, `analyst_view` and `earnings`, from figures
   already fetched (the balance sheet was loaded but total assets / equity went unread; the option
   chain analogue here is the raw statement). `fundamentals` now also surfaces total assets,

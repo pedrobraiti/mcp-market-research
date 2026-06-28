@@ -37,9 +37,13 @@ _SERIES: tuple[tuple[str, str], ...] = (
     ("UNRATE", "Unemployment Rate (%)"),
     ("CPIAUCSL", "CPI (index, SA)"),
     ("VIXCLS", "VIX (volatility index)"),
+    ("T10YIE", "10-Year Breakeven Inflation (%)"),
+    ("DFII10", "10-Year TIPS Real Yield (%)"),
+    ("BAMLH0A0HYM2", "US High-Yield Credit Spread (OAS, %)"),
 )
 
 _VIX_WINDOW = 252  # ~1 trading year for the VIX regime z-score/percentile
+_CREDIT_WINDOW = 252  # ~1 trading year for the credit-spread regime z-score
 _CPI_YOY_MIN_MONTHS = 13  # need a year-ago observation to compute YoY
 
 
@@ -221,6 +225,20 @@ def _derive(series: dict[str, list[tuple[date, Decimal]]]) -> MacroDerived:
             "recession_prob_12m: NY-Fed probit on the latest daily 10y-3m spread as a proxy for "
             "the model's monthly-average input."
         )
+
+    breakeven = series.get("T10YIE")
+    if breakeven:
+        derived.inflation_expectations_10y = _round(float(breakeven[-1][1]), 2)
+    real_yield = series.get("DFII10")
+    if real_yield:
+        derived.real_10y_exante = _round(float(real_yield[-1][1]), 2)
+    credit = series.get("BAMLH0A0HYM2")
+    if credit:
+        derived.credit_spread_hy = _round(float(credit[-1][1]), 2)
+        if len(credit) >= 30:
+            window = [float(v) for _, v in credit][-_CREDIT_WINDOW:]
+            z = zscore_of_last(window)
+            derived.credit_spread_hy_zscore = _round(z, 2)
 
     derived.notes = notes
     return derived

@@ -364,6 +364,10 @@ class MacroDerived(BaseModel):
     yield_curve_inverted: bool | None = None  # 10Y-2Y spread < 0
     yield_curve_days_inverted: int | None = None  # consecutive recent observations inverted
     recession_prob_12m: Decimal | None = None  # NY-Fed probit on the 10y-3m spread, in %
+    inflation_expectations_10y: Decimal | None = None  # 10y breakeven (market-expected CPI), %
+    real_10y_exante: Decimal | None = None  # 10y TIPS real yield (ex-ante real rate), %
+    credit_spread_hy: Decimal | None = None  # US high-yield OAS, % (financial-stress gauge)
+    credit_spread_hy_zscore: Decimal | None = None  # HY spread vs its ~1y window (stress regime)
     notes: list[str] = []
 
 
