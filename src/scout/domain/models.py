@@ -567,6 +567,13 @@ class OptionsVolatility(BaseModel):
     expected_move_amount: Decimal | None = None
     expected_move_low: Decimal | None = None
     expected_move_high: Decimal | None = None
+    # --- Derived (raw measures, no verdict) ---
+    iv_skew: Decimal | None = None  # (OTM put IV − OTM call IV)/ATM IV; >0 = puts richer (fear)
+    put_call_ratio_volume: Decimal | None = None  # Σ put volume / Σ call volume (this expiry)
+    put_call_ratio_oi: Decimal | None = None  # Σ put OI / Σ call OI (this expiry)
+    realized_vol: Decimal | None = None  # trailing ~3mo close-to-close vol, annualized
+    iv_rv_ratio: Decimal | None = None  # ATM IV / realized vol (>1 = options look rich)
+    volatility_risk_premium: Decimal | None = None  # ATM IV − realized vol (the stateless IV-rank)
     note: str | None = None
 
 

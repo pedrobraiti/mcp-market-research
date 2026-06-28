@@ -81,6 +81,12 @@ dates anchor the entries.
   null for uncapped assets (no max supply). The circulating-based ratios populate only when the
   source reports circulating supply (the free Coinpaprika tier currently returns it null for some
   assets — they degrade to null rather than erroring). See ADR-010.
+- **Derived options layer** on `options_volatility`, from the chain already fetched (only ATM IV
+  was used before): **iv_skew** (OTM put vs call IV over ATM — >0 = puts richer/fear), **put/call
+  ratios** (volume & open interest), and the **volatility risk premium** — ATM IV minus trailing
+  realized vol — with **iv_rv_ratio** (>1 = options look rich). The VRP is the stateless stand-in
+  for IV rank; true IV-rank/percentile need stored IV history a stateless server can't keep, so
+  they're omitted. Illiquid wings (IV ≤ 0) are skipped so skew isn't built on garbage. See ADR-011.
 - Resilience: retry/backoff on yfinance, and a transparent **stooq fallback** for price history so
   a yfinance failure doesn't lose data.
 - 145 offline tests; live-validated against every source.

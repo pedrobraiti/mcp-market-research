@@ -409,8 +409,22 @@ async def test_analyst_view_reports_consensus():
 
 
 async def test_options_volatility_expected_move():
-    calls = pd.DataFrame({"strike": [240.0, 250.0, 260.0], "impliedVolatility": [0.40, 0.30, 0.42]})
-    puts = pd.DataFrame({"strike": [240.0, 250.0, 260.0], "impliedVolatility": [0.41, 0.32, 0.43]})
+    calls = pd.DataFrame(
+        {
+            "strike": [240.0, 250.0, 260.0],
+            "impliedVolatility": [0.40, 0.30, 0.42],
+            "volume": [100, 200, 150],
+            "openInterest": [1000, 2000, 1500],
+        }
+    )
+    puts = pd.DataFrame(
+        {
+            "strike": [240.0, 250.0, 260.0],
+            "impliedVolatility": [0.41, 0.32, 0.43],
+            "volume": [300, 250, 200],
+            "openInterest": [3000, 2500, 2000],
+        }
+    )
 
     class _Chain:
         def __init__(self):
@@ -425,6 +439,9 @@ async def test_options_volatility_expected_move():
         def option_chain(self, expiry):
             return _Chain()
 
+        def history(self, period=None, **kwargs):
+            return pd.DataFrame({"Close": [250 + (i % 5 - 2) * 3 for i in range(40)]})
+
     source = YFinanceMarketData(ticker_factory=OptionsTicker)
     vol = await source.get_options_volatility("AAPL")
     assert vol is not None
@@ -434,6 +451,14 @@ async def test_options_volatility_expected_move():
     assert vol.current_price == Decimal("250.0")
     assert vol.expected_move_percent is not None and vol.expected_move_percent > Decimal("0")
     assert vol.expected_move_low < Decimal("250") < vol.expected_move_high
+    # Derived: OTM put (240, IV .41) vs OTM call (260, IV .42), over ATM .31.
+    assert vol.iv_skew == Decimal("-0.0323")
+    assert vol.put_call_ratio_volume == Decimal("1.6667")  # 750 / 450
+    assert vol.put_call_ratio_oi == Decimal("1.6667")  # 7500 / 4500
+    # VRP: ATM IV vs trailing realized vol from the 40-close history.
+    assert vol.realized_vol is not None and vol.realized_vol > Decimal("0")
+    assert vol.iv_rv_ratio is not None
+    assert vol.volatility_risk_premium is not None
 
 
 async def test_options_volatility_none_without_chain():

@@ -18,6 +18,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
+from ...analytics import realized_volatility
 from ...domain.models import (
     AnalystView,
     CompanySnapshot,
@@ -587,15 +588,36 @@ class YFinanceMarketData:
         price = _dec(info.get("currentPrice") or info.get("regularMarketPrice")) if info else None
         expiry_date = _to_date(chosen)
         days = (expiry_date - date.today()).days if expiry_date else None
-        atm_strike, atm_iv = _atm_iv(
-            getattr(chain, "calls", None), getattr(chain, "puts", None), price
-        )
+        calls = getattr(chain, "calls", None)
+        puts = getattr(chain, "puts", None)
+        atm_strike, atm_iv = _atm_iv(calls, puts, price)
         move_pct = move_amount = move_low = move_high = None
         if atm_iv is not None and price is not None and days and days > 0:
             move_pct = atm_iv * Decimal(str(math.sqrt(days / 365)))
             move_amount = price * move_pct
             move_low = price - move_amount
             move_high = price + move_amount
+
+        # IV skew: out-of-the-money put IV vs call IV, normalized by ATM (>0 = puts richer = fear).
+        otm_put_iv = _otm_iv(puts, price, above=False)
+        otm_call_iv = _otm_iv(calls, price, above=True)
+        iv_skew = None
+        if otm_put_iv is not None and otm_call_iv is not None and atm_iv and atm_iv > 0:
+            iv_skew = (otm_put_iv - otm_call_iv) / atm_iv
+        # Put/Call ratios over this expiry (sentiment/positioning).
+        call_vol, put_vol = _chain_sum(calls, "volume"), _chain_sum(puts, "volume")
+        call_oi, put_oi = _chain_sum(calls, "openInterest"), _chain_sum(puts, "openInterest")
+        pcr_volume = (
+            put_vol / call_vol if put_vol is not None and call_vol and call_vol > 0 else None
+        )
+        pcr_oi = put_oi / call_oi if put_oi is not None and call_oi and call_oi > 0 else None
+        # Volatility risk premium: implied (ATM IV) vs trailing realized vol — stateless IV-rank.
+        realized = realized_volatility(_recent_closes(ticker), periods_per_year=252)
+        realized_dec = _dec(realized)
+        vrp = iv_rv = None
+        if atm_iv is not None and realized_dec is not None and realized_dec > 0:
+            vrp = atm_iv - realized_dec
+            iv_rv = atm_iv / realized_dec
         return OptionsVolatility(
             symbol=symbol,
             expiry=expiry_date,
@@ -607,6 +629,12 @@ class YFinanceMarketData:
             expected_move_amount=_quantize(move_amount, 2),
             expected_move_low=_quantize(move_low, 2),
             expected_move_high=_quantize(move_high, 2),
+            iv_skew=_quantize(iv_skew, 4),
+            put_call_ratio_volume=_quantize(pcr_volume, 4),
+            put_call_ratio_oi=_quantize(pcr_oi, 4),
+            realized_vol=_quantize(realized_dec, 4),
+            iv_rv_ratio=_quantize(iv_rv, 4),
+            volatility_risk_premium=_quantize(vrp, 4),
             note=None if atm_iv is not None else "No implied vol available for this expiry.",
         )
 
@@ -831,6 +859,59 @@ def _atm_iv(
     ivs = [iv for iv in (call_iv, put_iv) if iv is not None and iv > 0]
     average_iv = sum(ivs) / len(ivs) if ivs else None
     return call_strike, average_iv
+
+
+def _chain_sum(frame: Any, column: str) -> Decimal | None:
+    """Sum a numeric column (volume / openInterest) across an option-chain frame."""
+    if frame is None or getattr(frame, "empty", True):
+        return None
+    if column not in getattr(frame, "columns", []):
+        return None
+    total = Decimal(0)
+    seen = False
+    for value in frame[column].tolist():
+        dec = _dec(value)
+        if dec is not None:
+            total += dec
+            seen = True
+    return total if seen else None
+
+
+def _otm_iv(frame: Any, price: Decimal | None, *, above: bool) -> Decimal | None:
+    """IV of the nearest out-of-the-money strike — above the price for calls, below for puts.
+    Skips non-positive IV (illiquid wings often report 0/NaN) so skew isn't built on garbage."""
+    if frame is None or getattr(frame, "empty", True) or price is None:
+        return None
+    best_iv: Decimal | None = None
+    best_diff = float("inf")
+    target = float(price)
+    for _, row in frame.iterrows():
+        strike = _dec(row.get("strike"))
+        iv = _dec(row.get("impliedVolatility"))
+        if strike is None or iv is None or iv <= 0:
+            continue
+        if above and strike <= price:
+            continue
+        if not above and strike >= price:
+            continue
+        diff = abs(float(strike) - target)
+        if diff < best_diff:
+            best_diff, best_iv = diff, iv
+    return best_iv
+
+
+def _recent_closes(ticker: Any, period: str = "3mo") -> list[float]:
+    """Trailing daily closes as floats (best-effort) for a realized-volatility read."""
+    history = getattr(ticker, "history", None)
+    if not callable(history):
+        return []
+    try:
+        frame = history(period=period)
+    except Exception:  # noqa: BLE001 — realized vol is supplementary; never fail the options read
+        return []
+    if frame is None or len(frame) == 0 or "Close" not in getattr(frame, "columns", []):
+        return []
+    return [float(c) for c in frame["Close"].tolist() if c is not None]
 
 
 def _major_holder_pcts(frame: Any) -> tuple[Decimal | None, Decimal | None]:

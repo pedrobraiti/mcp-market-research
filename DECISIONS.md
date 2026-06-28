@@ -217,3 +217,35 @@ turn raw circulating/total/max counts into a read on unlock overhang and issuanc
 - **Deferred (M6b).** SSR (market cap ÷ stablecoin supply) and Mcap/TVL need cross-source joins;
   on-chain valuation (MVRV/NVT/realized cap) needs node/Glassnode data the keyless sources don't
   provide — not approximated.
+
+---
+
+## ADR-011 — Derive options signals from the chain already fetched; VRP as the stateless IV-rank
+
+**Decision.** `options_volatility` adds, from the same option chain it already pulled, the IV skew
+(OTM put vs call IV over ATM), put/call ratios (volume and open interest), and the volatility risk
+premium (ATM IV minus trailing realized vol) with the IV/RV ratio.
+
+**Why.** The full chain — every strike's IV, volume and open interest — was fetched and all but the
+ATM IV discarded. Skew and put/call ratios were one pass over that frame; the VRP only needed the
+realized vol, which the same adapter can compute from a short history pull (and which `analytics.py`
+already implements from M1). These are the highest-value options reads, and computing them here
+keeps the agent from re-deriving them.
+
+**Choices that matter.**
+- **VRP is the stateless IV-rank.** "Is IV rich or cheap right now?" is what traders want from IV
+  rank/percentile — but those need a stored time series of the name's own IV, which a stateless
+  server (ADR-003) can't keep. VRP and the IV/RV ratio answer the same question from a single read
+  (today's IV vs the stock's own trailing realized vol), so they are shipped and IV-rank is
+  explicitly omitted rather than faked with a cache.
+- **Skip illiquid wings.** OTM strikes routinely report 0/NaN IV; the skew uses only the nearest OTM
+  strike with IV > 0 on each side, so it isn't built on garbage quotes.
+- **Black-Scholes stays possible without scipy.** The normal CDF (`math.erf`) is in the stdlib — so
+  probability-of-ITM/touch is feasible later (M4b) — but it needs a target strike to be meaningful,
+  so it's deferred rather than bolted on without a clear use.
+- **Nearest-expiry caveat.** Like the existing expected move, the derived reads use the nearest
+  expiry, which for very liquid names is often 0–1 DTE where skew is inherently noisy — the number is
+  computed correctly; the noise is a property of that expiry, not a defect.
+- **Measures, not a verdict (ADR-004).** It reports a VRP and a skew; it never says "sell premium".
+- **Deferred (M4b).** IV term structure (multi-expiry fetches), earnings-driven implied move / IV
+  crush, and probability-of-ITM/touch — more fetches or a target strike — left for a follow-up.

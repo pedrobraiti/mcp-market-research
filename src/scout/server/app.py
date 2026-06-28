@@ -397,9 +397,12 @@ async def options_volatility(symbol: str, expiry: str | None = None) -> dict:
     """Implied volatility and the options-implied expected move for a US stock/ETF.
 
     Returns ATM implied vol and the 1-sigma expected move (% and $ range) to the chosen `expiry`
-    (YYYY-MM-DD; nearest by default) — i.e. how much the options market is pricing the stock to
-    swing (useful sizing a stop or gauging an earnings move). `data` is null if no options trade.
-    Raw numbers, not a trade call.
+    (YYYY-MM-DD; nearest by default), plus derived reads from the same chain: iv_skew (OTM put vs
+    call IV, >0 = puts richer/fear), put/call ratios (volume & OI), and the volatility risk premium
+    — ATM IV minus trailing realized vol, with the iv_rv_ratio (>1 = options look rich). The VRP is
+    the stateless stand-in for IV rank (true IV-rank/percentile need stored IV history, which a
+    stateless server can't provide, so they're intentionally omitted). `data` is null if no options
+    trade. Raw numbers, not a trade call.
     """
     svc = services()
     try:
