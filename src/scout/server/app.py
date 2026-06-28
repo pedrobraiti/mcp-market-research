@@ -264,14 +264,14 @@ async def fundamentals(symbol: str, period: str = "annual", as_of: str | None = 
 
     `period` is "annual" or "quarterly". Returns revenue, gross/operating income, net income,
     margins, total debt/cash/assets, stockholders' equity and free cash flow, for the latest
-    fiscal period at or before `as_of`, plus a derived valuation/solvency/quality block:
-    net_debt and net_debt_to_fcf, fcf_margin, gross_profitability (Novy-Marx) and pretax ROIC;
-    liquidity & leverage — current_ratio, working_capital, debt_to_equity, EBITDA, net_debt_to_ebitda,
-    interest_coverage and the Altman Z″ distress score (book-equity variant: >2.6 safe, <1.1 distress);
-    and, on a live read (no `as_of`, paired with current market cap), FCF & earnings yield,
-    enterprise value and EV/EBIT, EV/EBITDA, EV/Sales, EBIT/EV. Each derived field is null when an
-    input is missing or its denominator isn't positive (so a value never silently misleads). Raw
-    numbers, not a rating. `data` is null if no statements are available. (`as_of` is YYYY-MM-DD.)
+    fiscal period at or before `as_of`, plus a derived block. Valuation/quality: net_debt,
+    net_debt_to_fcf, fcf_margin, gross_profitability (Novy-Marx), pretax ROIC. Liquidity/leverage:
+    current_ratio, working_capital, debt_to_equity, EBITDA, net_debt_to_ebitda, interest_coverage,
+    and the Altman Z″ distress score (book-equity variant; >2.6 safe, <1.1 distress). On a live read
+    (paired with current market cap): FCF & earnings yield, enterprise value, EV/EBIT, EV/EBITDA,
+    EV/Sales, EBIT/EV. Each derived field is null when an input is missing or its denominator isn't
+    positive (so a value never silently misleads). Raw numbers, not a rating. `data` is null if no
+    statements are available. (`as_of` is YYYY-MM-DD.)
     """
     svc = services()
     try:
