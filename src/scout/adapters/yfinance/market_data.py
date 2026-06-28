@@ -69,6 +69,15 @@ _STOCKHOLDERS_EQUITY = (
     "Total Stockholder Equity",
     "Common Stock Equity",
 )
+_CURRENT_ASSETS = ("Current Assets", "Total Current Assets")
+_CURRENT_LIABILITIES = ("Current Liabilities", "Total Current Liabilities")
+_RETAINED_EARNINGS = ("Retained Earnings",)
+_INTEREST_EXPENSE = ("Interest Expense", "Interest Expense Non Operating")
+_DEP_AMORT = (
+    "Depreciation And Amortization",
+    "Depreciation Amortization Depletion",
+    "Reconciled Depreciation",
+)
 
 
 def _default_ticker_factory(symbol: str) -> Any:
@@ -158,6 +167,27 @@ def _diff(a: Decimal | None, b: Decimal | None) -> Decimal | None:
 
 def _add(a: Decimal | None, b: Decimal | None) -> Decimal | None:
     return None if a is None or b is None else a + b
+
+
+def _altman_z_double_prime(
+    working_capital: Decimal | None,
+    retained_earnings: Decimal | None,
+    ebit: Decimal | None,
+    equity: Decimal | None,
+    total_assets: Decimal | None,
+    total_liabilities: Decimal | None,
+) -> Decimal | None:
+    """Altman Z″ (the book-equity variant for non-manufacturers/all sectors): uses book equity for
+    X4 so no market cap is needed — works on a point-in-time read. >2.6 safe, 1.1–2.6 grey, <1.1
+    distress. Null unless all inputs are present and the divisors are positive."""
+    parts = (working_capital, retained_earnings, ebit, equity, total_assets, total_liabilities)
+    if any(p is None for p in parts) or total_assets <= 0 or total_liabilities <= 0:
+        return None
+    x1 = working_capital / total_assets
+    x2 = retained_earnings / total_assets
+    x3 = ebit / total_assets
+    x4 = equity / total_liabilities
+    return Decimal("6.56") * x1 + Decimal("3.26") * x2 + Decimal("6.72") * x3 + Decimal("1.05") * x4
 
 
 class YFinanceMarketData:
@@ -345,7 +375,14 @@ class YFinanceMarketData:
         total_cash = _row(balance, balance_col, *_TOTAL_CASH) if balance_col else None
         total_assets = _row(balance, balance_col, *_TOTAL_ASSETS) if balance_col else None
         equity = _row(balance, balance_col, *_STOCKHOLDERS_EQUITY) if balance_col else None
+        current_assets = _row(balance, balance_col, *_CURRENT_ASSETS) if balance_col else None
+        current_liab = _row(balance, balance_col, *_CURRENT_LIABILITIES) if balance_col else None
+        retained = _row(balance, balance_col, *_RETAINED_EARNINGS) if balance_col else None
         free_cash_flow = _row(cash, cash_col, *_FREE_CASH_FLOW) if cash_col else None
+        interest = _row(income, column, *_INTEREST_EXPENSE)
+        dep_amort = (_row(cash, cash_col, *_DEP_AMORT) if cash_col else None) or _row(
+            income, column, *_DEP_AMORT
+        )
 
         # Market cap only on a live read: the source has no historical cap to pair with a past
         # statement, so cap-based valuation would silently mix "today" with an old fiscal period.
@@ -354,6 +391,13 @@ class YFinanceMarketData:
         net_debt = _diff(total_debt, total_cash)
         enterprise_value = _add(market_cap, net_debt)  # = market_cap + total_debt − total_cash
         invested_capital = _diff(_add(total_debt, equity), total_cash)
+        ebitda = _add(operating_income, dep_amort)  # EBIT + D&A
+        working_capital = _diff(current_assets, current_liab)
+        total_liabilities = _diff(total_assets, equity)  # accounting identity
+        interest_abs = abs(interest) if interest is not None else None
+        altman = _altman_z_double_prime(
+            working_capital, retained, operating_income, equity, total_assets, total_liabilities
+        )
         return Fundamentals(
             symbol=symbol,
             period=period,
@@ -382,6 +426,18 @@ class YFinanceMarketData:
             ebit_to_ev=_ratio_pos(operating_income, enterprise_value, 4),
             gross_profitability=_ratio_pos(gross_profit, total_assets, 6),
             roic_pretax=_ratio_pos(operating_income, invested_capital, 6),
+            current_assets=current_assets,
+            current_liabilities=current_liab,
+            retained_earnings=retained,
+            depreciation_amortization=dep_amort,
+            ebitda=_quantize(ebitda, 2),
+            current_ratio=_ratio_pos(current_assets, current_liab, 4),
+            working_capital=_quantize(working_capital, 2),
+            debt_to_equity=_ratio_pos(total_debt, equity, 4),
+            net_debt_to_ebitda=_ratio_pos(net_debt, ebitda, 2),
+            ev_to_ebitda=_ratio_pos(enterprise_value, ebitda, 4),
+            interest_coverage=_ratio_pos(operating_income, interest_abs, 2),
+            altman_z=_quantize(altman, 2),
             as_of=as_of,
         )
 

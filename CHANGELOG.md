@@ -69,6 +69,12 @@ dates anchor the entries.
   **avg_surprise** and **surprise_consistency**. Cap-based ratios are null on a point-in-time
   (`as_of`) read — the source has no historical market cap to pair with a past statement — and any
   ratio is null when its denominator isn't positive. See ADR-008.
+- **Fundamentals extended** with liquidity/leverage/coverage from more of the same statements:
+  current assets/liabilities, retained earnings, D&A and interest expense are now read, giving
+  **current_ratio**, **working_capital**, **debt_to_equity**, **EBITDA** (EBIT + D&A) → **EV/EBITDA**
+  and **net_debt_to_ebitda**, **interest_coverage**, and the **Altman Z″** distress score (book-equity
+  variant — no market cap needed, so it works on a point-in-time read). Null where a line is missing
+  or a divisor isn't positive. See ADR-008.
 - **Derived crypto microstructure/derivatives layer** on `crypto_derivatives` and
   `crypto_order_book`, from data already fetched and discarded. `crypto_derivatives` now adds a
   per-venue **annualized funding rate** and cross-venue aggregates: **OI-weighted funding

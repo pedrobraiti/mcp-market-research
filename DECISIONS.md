@@ -160,9 +160,12 @@ time. Doing it once in the data layer is correct, auditable and free.
   the closest honest substitutes; the field names say so.
 - **Measures, not a rating (ADR-004).** It reports a 97% ROIC and an 11% upside; it never says
   "high quality" or "buy".
-- **Deferred (M3b).** Piotroski/Altman/Beneish and EV/EBITDA need inputs not yet fetched (current
-  assets/liabilities, retained earnings, D&A, interest expense) — left for a follow-up rather than
-  approximated past the point of meaning.
+- **Followed up (was M3b).** The extra balance/income/cash lines were later read (current
+  assets/liabilities, retained earnings, D&A, interest expense), unlocking current_ratio,
+  working_capital, debt_to_equity, EBITDA → EV/EBITDA & net_debt/EBITDA, interest_coverage and the
+  **Altman Z″** distress score (book-equity variant, so no market cap needed → works on `as_of`).
+  Beneish M-Score stays out — its 8 YoY indices need 5+ more line items with unstable spellings and
+  it's a niche forensic score (see the manager desk's nice-to-have-probably-not note).
 
 ---
 

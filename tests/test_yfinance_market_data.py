@@ -49,12 +49,14 @@ _INCOME = pd.DataFrame(
             "Gross Profit": 180_683_000_000.0,
             "Operating Income": 123_216_000_000.0,
             "Net Income": 93_736_000_000.0,
+            "Interest Expense": 3_933_000_000.0,
         },
         pd.Timestamp("2023-09-30"): {
             "Total Revenue": 383_285_000_000.0,
             "Gross Profit": 169_148_000_000.0,
             "Operating Income": 114_301_000_000.0,
             "Net Income": 96_995_000_000.0,
+            "Interest Expense": 3_933_000_000.0,
         },
     }
 )
@@ -66,12 +68,20 @@ _BALANCE = pd.DataFrame(
             "Cash And Cash Equivalents": 29_943_000_000.0,
             "Total Assets": 364_980_000_000.0,
             "Stockholders Equity": 56_950_000_000.0,
+            "Current Assets": 152_987_000_000.0,
+            "Current Liabilities": 176_392_000_000.0,
+            "Retained Earnings": 50_000_000_000.0,
         }
     }
 )
 
 _CASHFLOW = pd.DataFrame(
-    {pd.Timestamp("2024-09-30"): {"Free Cash Flow": 108_807_000_000.0}}
+    {
+        pd.Timestamp("2024-09-30"): {
+            "Free Cash Flow": 108_807_000_000.0,
+            "Depreciation And Amortization": 11_445_000_000.0,
+        }
+    }
 )
 
 _DIVIDENDS = pd.Series(
@@ -293,6 +303,22 @@ async def test_fundamentals_derived_valuation_solvency_quality():
     assert f.enterprise_value == Decimal("3576686000000")  # cap + net_debt
     assert f.ev_to_ebit is not None and Decimal("29") < f.ev_to_ebit < Decimal("30")
     assert f.fcf_yield is not None and Decimal("0.030") < f.fcf_yield < Decimal("0.032")
+
+
+async def test_fundamentals_solvency_coverage_altman():
+    f = await _source().get_fundamentals("AAPL")  # live read
+    assert f is not None
+    # Liquidity / leverage from the newly-read balance-sheet lines.
+    assert Decimal("0.86") < f.current_ratio < Decimal("0.87")  # 152.987B / 176.392B
+    assert f.working_capital == Decimal("-23405000000.00")  # current assets − current liabilities
+    assert Decimal("1.8") < f.debt_to_equity < Decimal("1.9")  # 106.629B / 56.950B
+    # EBITDA = EBIT + D&A, and the leverage/valuation built on it.
+    assert f.ebitda == Decimal("134661000000.00")  # 123.216B + 11.445B
+    assert f.net_debt_to_ebitda == Decimal("0.57")  # 76.686B / 134.661B
+    assert f.ev_to_ebitda is not None and Decimal("26") < f.ev_to_ebitda < Decimal("27")
+    assert f.interest_coverage == Decimal("31.33")  # 123.216B / 3.933B
+    # Altman Z″ in the grey zone for these inputs (book-equity variant).
+    assert f.altman_z is not None and Decimal("2.0") < f.altman_z < Decimal("3.0")
 
 
 async def test_fundamentals_as_of_selects_older_period():

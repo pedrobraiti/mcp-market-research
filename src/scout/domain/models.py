@@ -124,6 +124,19 @@ class Fundamentals(BaseModel):
     ebit_to_ev: Decimal | None = None  # operating_income / EV (Greenblatt-style earnings yield)
     gross_profitability: Decimal | None = None  # gross_profit / total_assets (Novy-Marx quality)
     roic_pretax: Decimal | None = None  # operating_income / (total_debt + equity − cash)
+    # --- Liquidity / leverage / coverage (statement-only unless noted) ---
+    current_assets: Decimal | None = None
+    current_liabilities: Decimal | None = None
+    retained_earnings: Decimal | None = None
+    depreciation_amortization: Decimal | None = None
+    ebitda: Decimal | None = None  # operating_income (EBIT) + D&A
+    current_ratio: Decimal | None = None  # current_assets / current_liabilities
+    working_capital: Decimal | None = None  # current_assets − current_liabilities
+    debt_to_equity: Decimal | None = None  # total_debt / stockholders_equity
+    net_debt_to_ebitda: Decimal | None = None  # net_debt / EBITDA (leverage; null if EBITDA ≤ 0)
+    ev_to_ebitda: Decimal | None = None  # enterprise_value / EBITDA (live read only)
+    interest_coverage: Decimal | None = None  # EBIT / interest expense (null if no interest)
+    altman_z: Decimal | None = None  # Altman Z″ (book-equity variant; >2.6 safe, <1.1 distress)
     as_of: date | None = None
 
 
