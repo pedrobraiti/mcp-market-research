@@ -322,9 +322,13 @@ async def technicals(symbol: str, as_of: str | None = None) -> dict:
     """Technical indicators for a US stock/ETF, computed from ~2y of daily bars.
 
     Returns last price, SMA(50/200), EMA(20), RSI(14), MACD (line/signal/histogram), ATR(14)
-    and the 52-week high/low. These are **raw numbers, not a verdict** — e.g. it reports RSI and
-    price-vs-SMA, it does not say "overbought" or "uptrend"; you draw the conclusion. Pass `as_of`
-    (YYYY-MM-DD) for a point-in-time read. `data` is null if there isn't enough price history.
+    and the 52-week high/low, plus a derived risk/momentum layer: annualized volatility
+    (close-to-close and Yang-Zhang OHLC), ATR%, 52w range position, Sharpe/Sortino/Calmar,
+    max drawdown (+ underwater bars), return skew/kurtosis and momentum (3m/6m/12m and 12-1).
+    Ratios are annualized at 252 trading days with risk-free=0. These are **raw numbers, not a
+    verdict** — it reports RSI, drawdown, Sharpe; it does not say "overbought" or "good risk".
+    Pass `as_of` (YYYY-MM-DD) for a point-in-time read. `data` is null if there isn't enough
+    price history (each derived field is null until its own minimum sample is met).
     """
     svc = services()
     try:
@@ -729,11 +733,13 @@ async def crypto_price_history(
 async def crypto_technicals(symbol: str, as_of: str | None = None) -> dict:
     """Technical indicators for a crypto pair, computed from ~300 daily candles.
 
-    Returns last price, SMA(50/200), EMA(20), RSI(14), MACD, ATR(14) and the 52-week high/low —
-    the same indicator set as the equities `technicals` tool, reusing the same pure math. `symbol`
-    is a CCXT pair ("BTC/USDT" or "BTC"); pass `as_of` (YYYY-MM-DD) for a point-in-time read.
-    **Raw numbers, not a verdict** (no "overbought"/"uptrend"). `data` is null if there isn't
-    enough history.
+    Same indicator set as the equities `technicals` tool plus the derived risk/momentum layer
+    (volatility, ATR%, 52w range position, Sharpe/Sortino/Calmar, max drawdown, skew/kurtosis,
+    momentum), reusing the same pure math. Crypto-calibrated: ratios annualize at 365 (24/7) and
+    OHLC volatility uses the Rogers-Satchell estimator (no overnight gap to model). `symbol` is a
+    CCXT pair ("BTC/USDT" or "BTC"); pass `as_of` (YYYY-MM-DD) for a point-in-time read. **Raw
+    numbers, not a verdict** (no "overbought"/"uptrend"). `data` is null if there isn't enough
+    history.
     """
     svc = services()
     if svc.crypto_market_data is None:
@@ -744,7 +750,10 @@ async def crypto_technicals(symbol: str, as_of: str | None = None) -> dict:
         )
         if history is None or not history.bars:
             return _ok(None)
-        return _ok(compute_technicals(_crypto_to_price_history(history)).model_dump(mode="json"))
+        tech = compute_technicals(
+            _crypto_to_price_history(history), periods_per_year=365, overnight_gaps=False
+        )
+        return _ok(tech.model_dump(mode="json"))
     except ValueError as exc:
         return _err(exc)
     except Exception as exc:  # noqa: BLE001

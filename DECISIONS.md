@@ -67,3 +67,33 @@ complete — e.g. fetching and cleanly extracting page content.
 essentially on par with a dedicated web-research product, converging on the same primary facts.
 The remaining gap was mostly **fetching primary sources** — a capture problem a clean extraction
 tool addresses — not a synthesis problem. So research stays in the brain; Scout sharpens its eyes.
+
+---
+
+## ADR-006 — Derive risk numbers from OHLCV the agent already pays for
+
+**Decision.** `technicals`/`crypto_technicals` now also return a derived risk/volatility/momentum
+layer (realized & OHLC volatility, Sharpe/Sortino/Calmar, max drawdown, skew/kurtosis, momentum)
+computed in `analytics.py`. This stays within ADR-004: they are explicit measures, not verdicts —
+Scout reports a Sharpe of 0.66 and a −33% drawdown, it never says "good risk" or "buy".
+
+**Why.** Scout already fetched full OHLCV and then collapsed it to the close for SMA/RSI/etc.,
+leaving the open/high/low and the whole return distribution on the floor. Recomputing this layer
+in the agent or the skill would mean every consumer re-deriving the same math from raw bars (and
+getting the annualization wrong). Putting it in the deterministic data layer makes it correct once,
+auditable, and free to whoever calls the tool.
+
+**Choices that matter.**
+- **Asset-class aware annualization.** Ratios annualize at 252 (equities trading days) vs 365
+  (crypto 24/7); the chosen factor is surfaced as `annualization_factor` so the number is never
+  ambiguous. Getting this wrong inflates crypto vol by ~20%.
+- **Estimator by market structure.** OHLC volatility uses **Yang-Zhang** for equities (it models
+  the overnight gap, the most efficient estimator when gaps exist) and **Rogers-Satchell** for
+  crypto (no overnight gap in a 24/7 market, so the gap term degenerates). The estimator used is
+  reported in `volatility_estimator`.
+- **Pure-Python, no new deps.** All of it is stdlib arithmetic (no numpy/pandas/scipy), keeping
+  `analytics.py` offline-unit-testable and the install light. Each field returns `null` below its
+  own minimum sample rather than emitting a noisy, meaningless number.
+- **Stateless-respecting.** Only metrics computable from a single on-demand price-history read are
+  included. Metrics that need stored history (e.g. IV-rank from an implied-vol time series) were
+  deliberately left out — they would break ADR-003.

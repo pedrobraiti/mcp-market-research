@@ -216,7 +216,9 @@ async def build_crypto_dossier(
             for b in history.bars
         ]
         technicals = compute_technicals(
-            PriceHistory(symbol=history.symbol, interval=history.timeframe, bars=bars)
+            PriceHistory(symbol=history.symbol, interval=history.timeframe, bars=bars),
+            periods_per_year=365,
+            overnight_gaps=False,
         )
 
     quote_ccy = quote.quote if quote else ""

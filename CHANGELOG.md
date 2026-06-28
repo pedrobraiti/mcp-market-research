@@ -38,6 +38,15 @@ dates anchor the entries.
 - `company_dossier` fans snapshot, fundamentals, dividends, technicals, earnings, analyst view
   and news out in parallel, degrading gracefully on partial failure.
 - Indicator math (`analytics.py`): SMA/EMA/RSI/MACD/ATR, 52-week range, return correlation.
+- **Derived risk/volatility/momentum layer** on `technicals` & `crypto_technicals` (same pure
+  `analytics.py`, no new deps, no new tools — additive fields, each null until its own minimum
+  sample is met): annualized realized volatility (close-to-close) and an OHLC estimator
+  (**Yang-Zhang** for equities, **Rogers-Satchell** for gapless 24/7 crypto), `atr_pct`,
+  52-week range position, **Sharpe / Sortino / Calmar**, max drawdown (+ underwater bars),
+  return skew & excess kurtosis, and momentum (3m/6m/12m and the 12-1 factor). Asset-class
+  aware: ratios annualize at 252 (equities) / 365 (crypto), surfaced via `annualization_factor`.
+  Turns OHLCV the Scout already fetched — but previously reduced to the close — into decision-grade
+  risk numbers. See ADR-006.
 - Resilience: retry/backoff on yfinance, and a transparent **stooq fallback** for price history so
   a yfinance failure doesn't lose data.
 - 145 offline tests; live-validated against every source.

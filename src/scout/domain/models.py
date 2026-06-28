@@ -273,8 +273,25 @@ class Technicals(BaseModel):
     macd_signal: Decimal | None = None
     macd_histogram: Decimal | None = None
     atr_14: Decimal | None = None
+    atr_pct: Decimal | None = None  # ATR(14) / last_price — cross-asset comparable "agitation"
     week52_high: Decimal | None = None
     week52_low: Decimal | None = None
+    range_position_52w: Decimal | None = None  # 0 (at 52w low) … 1 (at 52w high)
+    volatility_annualized: Decimal | None = None  # close-to-close, annualized
+    volatility_ohlc: Decimal | None = None  # OHLC estimator (see volatility_estimator)
+    volatility_estimator: str | None = None  # "yang_zhang" (equities) | "rogers_satchell" (crypto)
+    sharpe_ratio: Decimal | None = None  # annualized, risk-free=0 (excess-over-zero)
+    sortino_ratio: Decimal | None = None  # annualized, downside-deviation based
+    max_drawdown: Decimal | None = None  # worst peak-to-trough, as a fraction (≤ 0)
+    max_drawdown_bars: int | None = None  # longest underwater stretch, in bars
+    calmar_ratio: Decimal | None = None  # annualized return / |max drawdown|
+    return_skew: Decimal | None = None  # tail asymmetry of returns
+    return_kurtosis: Decimal | None = None  # excess kurtosis (>0 = fat tails)
+    momentum_3m: Decimal | None = None
+    momentum_6m: Decimal | None = None
+    momentum_12m: Decimal | None = None
+    momentum_12_1: Decimal | None = None  # 12-month return skipping the last month
+    annualization_factor: int | None = None  # 252 equities / 365 crypto — context for the ratios
     bars_used: int | None = None
 
 
