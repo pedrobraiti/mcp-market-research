@@ -257,5 +257,7 @@ keeps the agent from re-deriving them.
   expiry, which for very liquid names is often 0–1 DTE where skew is inherently noisy — the number is
   computed correctly; the noise is a property of that expiry, not a defect.
 - **Measures, not a verdict (ADR-004).** It reports a VRP and a skew; it never says "sell premium".
-- **Deferred (M4b).** IV term structure (multi-expiry fetches), earnings-driven implied move / IV
-  crush, and probability-of-ITM/touch — more fetches or a target strike — left for a follow-up.
+- **Partly followed up (M4b).** IV term structure (slope + contango/backwardation) was added via one
+  extra best-effort chain fetch at a longer expiry — a failure there (e.g. a 429) degrades to a null
+  slope and never sinks the near read. Still out: earnings-driven IV crush and probability-of-ITM/
+  touch (the latter needs a target strike to mean anything) — left until there's a clear use.

@@ -591,6 +591,10 @@ class OptionsVolatility(BaseModel):
     realized_vol: Decimal | None = None  # trailing ~3mo close-to-close vol, annualized
     iv_rv_ratio: Decimal | None = None  # ATM IV / realized vol (>1 = options look rich)
     volatility_risk_premium: Decimal | None = None  # ATM IV − realized vol (the stateless IV-rank)
+    far_expiry: date | None = None  # the longer-dated expiry used for the term-structure read
+    far_atm_iv: Decimal | None = None  # ATM IV at the far expiry
+    iv_term_slope: Decimal | None = None  # (far IV − near IV)/near IV
+    iv_term_structure: str | None = None  # "contango" (far>near, calm) | "backwardation" (stress)
     note: str | None = None
 
 

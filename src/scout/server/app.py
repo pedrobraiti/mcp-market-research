@@ -404,8 +404,10 @@ async def options_volatility(symbol: str, expiry: str | None = None) -> dict:
     call IV, >0 = puts richer/fear), put/call ratios (volume & OI), and the volatility risk premium
     — ATM IV minus trailing realized vol, with the iv_rv_ratio (>1 = options look rich). The VRP is
     the stateless stand-in for IV rank (true IV-rank/percentile need stored IV history, which a
-    stateless server can't provide, so they're intentionally omitted). `data` is null if no options
-    trade. Raw numbers, not a trade call.
+    stateless server can't provide, so they're intentionally omitted). It also reads the IV term
+    structure with one extra (best-effort) chain fetch at a longer expiry: iv_term_slope and
+    iv_term_structure — "contango" (normal) vs "backwardation" (near > far IV, i.e. near-term stress
+    or an event priced in). `data` is null if no options trade. Raw numbers, not a trade call.
     """
     svc = services()
     try:

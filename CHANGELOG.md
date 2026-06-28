@@ -104,6 +104,10 @@ dates anchor the entries.
   realized vol — with **iv_rv_ratio** (>1 = options look rich). The VRP is the stateless stand-in
   for IV rank; true IV-rank/percentile need stored IV history a stateless server can't keep, so
   they're omitted. Illiquid wings (IV ≤ 0) are skipped so skew isn't built on garbage. See ADR-011.
+- **IV term structure** on `options_volatility`: one extra best-effort chain fetch at a longer expiry
+  gives **iv_term_slope** and **iv_term_structure** — "contango" (normal) vs "backwardation" (near
+  IV > far IV, i.e. near-term stress/event priced in). The extra fetch is supplementary: a failure
+  (e.g. a 429) leaves the slope null and never sinks the near-expiry read. See ADR-011.
 - Resilience: retry/backoff on yfinance, and a transparent **stooq fallback** for price history so
   a yfinance failure doesn't lose data.
 - 145 offline tests; live-validated against every source.

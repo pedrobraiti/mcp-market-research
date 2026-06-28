@@ -674,6 +674,22 @@ class YFinanceMarketData:
         if atm_iv is not None and realized_dec is not None and realized_dec > 0:
             vrp = atm_iv - realized_dec
             iv_rv = atm_iv / realized_dec
+        # IV term structure: one extra (best-effort) chain fetch at a longer expiry. A failure here
+        # (e.g. a 429) must not sink the near-expiry read, so it degrades to a null slope.
+        far_expiry_str = _pick_far_expiry(expiries, chosen)
+        far_atm_iv = far_date = iv_term_slope = term_structure = None
+        if far_expiry_str:
+            try:
+                far_chain = ticker.option_chain(far_expiry_str)
+                _, far_atm_iv = _atm_iv(
+                    getattr(far_chain, "calls", None), getattr(far_chain, "puts", None), price
+                )
+                far_date = _to_date(far_expiry_str)
+            except Exception:  # noqa: BLE001 — term structure is supplementary
+                far_atm_iv = None
+        if atm_iv and atm_iv > 0 and far_atm_iv and far_atm_iv > 0:
+            iv_term_slope = (far_atm_iv - atm_iv) / atm_iv
+            term_structure = "backwardation" if atm_iv > far_atm_iv else "contango"
         return OptionsVolatility(
             symbol=symbol,
             expiry=expiry_date,
@@ -691,6 +707,10 @@ class YFinanceMarketData:
             realized_vol=_quantize(realized_dec, 4),
             iv_rv_ratio=_quantize(iv_rv, 4),
             volatility_risk_premium=_quantize(vrp, 4),
+            far_expiry=far_date,
+            far_atm_iv=_quantize(far_atm_iv, 4),
+            iv_term_slope=_quantize(iv_term_slope, 4),
+            iv_term_structure=term_structure,
             note=None if atm_iv is not None else "No implied vol available for this expiry.",
         )
 
@@ -915,6 +935,25 @@ def _atm_iv(
     ivs = [iv for iv in (call_iv, put_iv) if iv is not None and iv > 0]
     average_iv = sum(ivs) / len(ivs) if ivs else None
     return call_strike, average_iv
+
+
+def _pick_far_expiry(expiries: list[str], near: str, target_days: int = 45) -> str | None:
+    """A longer-dated expiry (after ``near``) closest to ``target_days`` out, for the IV term
+    structure. Returns None if there's no expiry beyond the near one."""
+    near_date = _to_date(near)
+    if near_date is None:
+        return None
+    today = date.today()
+    best: str | None = None
+    best_diff = float("inf")
+    for expiry in expiries:
+        far_date = _to_date(expiry)
+        if far_date is None or far_date <= near_date:
+            continue
+        diff = abs((far_date - today).days - target_days)
+        if diff < best_diff:
+            best_diff, best = diff, expiry
+    return best
 
 
 def _chain_sum(frame: Any, column: str) -> Decimal | None:

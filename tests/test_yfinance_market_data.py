@@ -452,18 +452,27 @@ async def test_options_volatility_expected_move():
         }
     )
 
+    far_calls = pd.DataFrame(
+        {"strike": [240.0, 250.0, 260.0], "impliedVolatility": [0.44, 0.35, 0.46]}
+    )
+    far_puts = pd.DataFrame(
+        {"strike": [240.0, 250.0, 260.0], "impliedVolatility": [0.45, 0.36, 0.47]}
+    )
+
     class _Chain:
-        def __init__(self):
-            self.calls = calls
-            self.puts = puts
+        def __init__(self, c, p):
+            self.calls = c
+            self.puts = p
 
     class OptionsTicker:
         def __init__(self, symbol):
             self.info = {"currentPrice": 250.0}
-            self.options = ["2026-07-10", "2026-08-21"]
+            self.options = ["2026-07-10", "2099-08-21"]
 
         def option_chain(self, expiry):
-            return _Chain()
+            if expiry == "2099-08-21":
+                return _Chain(far_calls, far_puts)
+            return _Chain(calls, puts)
 
         def history(self, period=None, **kwargs):
             return pd.DataFrame({"Close": [250 + (i % 5 - 2) * 3 for i in range(40)]})
@@ -485,6 +494,10 @@ async def test_options_volatility_expected_move():
     assert vol.realized_vol is not None and vol.realized_vol > Decimal("0")
     assert vol.iv_rv_ratio is not None
     assert vol.volatility_risk_premium is not None
+    # Term structure: far-expiry ATM IV (0.355) above the near ATM (0.31) → contango.
+    assert vol.far_atm_iv == Decimal("0.3550")
+    assert vol.iv_term_slope == Decimal("0.1452")  # (0.355 − 0.31) / 0.31
+    assert vol.iv_term_structure == "contango"
 
 
 async def test_options_volatility_none_without_chain():
