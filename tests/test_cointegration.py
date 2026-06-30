@@ -127,3 +127,61 @@ async def test_crit_values_always_present():
     assert result.adf_crit_5pct == Decimal("-3.34")
     assert result.adf_crit_1pct == Decimal("-3.90")
     assert result.adf_crit_10pct == Decimal("-3.04")
+
+
+# --- find_pairs (screen) ---------------------------------------------------------
+
+
+async def test_find_pairs_surfaces_the_cointegrated_pair():
+    # A=2B+resid (cointegrated, correlated); C an independent walk (uncorrelated → filtered out).
+    random.seed(1)
+    n = 200
+    b, resid, c = [100.0], [0.0], [50.0]
+    for _ in range(n - 1):
+        b.append(b[-1] + random.gauss(0, 1))
+        resid.append(0.5 * resid[-1] + random.gauss(0, 1))
+        c.append(c[-1] + random.gauss(0, 1))
+    a = [2 * b[i] + 10 + resid[i] for i in range(n)]
+
+    res = await _analyzer({"A": a, "B": b, "C": c}).find_pairs(
+        ["A", "B", "C"], lookback_days=200, min_correlation=0.5
+    )
+    names = {(p.symbol_a, p.symbol_b) for p in res.pairs}
+    assert ("A", "B") in names
+    assert res.pairs[0].is_cointegrated is True
+    assert res.pairs[0].correlation is not None
+    assert res.pairs_tested >= 1
+    assert res.source_status is None
+    assert set(res.symbols) == {"A", "B", "C"}
+
+
+async def test_find_pairs_correlation_prefilter_skips_uncorrelated():
+    # Two independent walks → near-zero return correlation → not even ADF-tested.
+    random.seed(5)
+    n = 150
+    a, b = [10.0], [10.0]
+    for _ in range(n - 1):
+        a.append(a[-1] + random.gauss(0, 1))
+        b.append(b[-1] + random.gauss(0, 1))
+    res = await _analyzer({"A": a, "B": b}).find_pairs(["A", "B"], min_correlation=0.9)
+    assert res.pairs_tested == 0
+    assert res.pairs == []
+
+
+async def test_find_pairs_drops_unfetchable_symbol():
+    async def _fetch(symbol):
+        if symbol == "BAD":
+            raise TimeoutError("boom")
+        return _history(symbol, [float(i) + (i % 7) for i in range(80)])
+
+    res = await CointegrationAnalyzer(_fetch).find_pairs(["A", "B", "BAD"], lookback_days=80)
+    assert res.source_status is not None and "BAD" in res.source_status
+    assert "BAD" not in res.symbols
+    assert set(res.symbols) == {"A", "B"}
+
+
+async def test_find_pairs_dedups_and_clamps_case_insensitively():
+    res = await _analyzer({"A": [float(i) for i in range(40)]}).find_pairs(["a", "A", "  "])
+    # "a"/"A" collapse to one symbol; with a single symbol there are no pairs.
+    assert res.symbols.count("A") <= 1
+    assert res.pairs == []

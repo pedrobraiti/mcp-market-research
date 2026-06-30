@@ -6,6 +6,15 @@ dates anchor the entries.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-06-30
+
+### Added
+- **`find_cointegrated_pairs`** (ADR-024): pairs *discovery* on top of `cointegration_test` — screen
+  a basket of symbols (return-correlation pre-filter → Engle-Granger ADF test) and return the
+  cointegrated pairs ranked strongest-first, each with hedge ratio, spread z-score and half-life.
+  Multiple-testing honest (reports `pairs_tested` + the 1% level, steers to the strongest hits);
+  the universe is capped (40) and unfetchable symbols are named in `source_status` (rate-limit aware).
+
 ## [0.5.0] — 2026-06-30
 
 Eight new keyless tools (53 → 61) plus a major macro expansion, all free/keyless and following the

@@ -1497,3 +1497,49 @@ class Cointegration(BaseModel):
         ),
     )
     note: str | None = None
+
+
+class PairCandidate(BaseModel):
+    """One cointegrated pair found by the screen, with the same stats as ``Cointegration``."""
+
+    symbol_a: str
+    symbol_b: str
+    correlation: Decimal | None = None  # return correlation (the pre-filter that earned the test)
+    hedge_ratio_beta: Decimal | None = None
+    adf_stat: Decimal | None = None
+    is_cointegrated: bool | None = None  # adf_stat < the 5% critical value
+    spread_zscore: Decimal | None = None  # how stretched the spread is now (the live signal)
+    half_life_days: Decimal | None = None
+    n_obs: int | None = None
+
+
+class CointegratedPairs(BaseModel):
+    """Cointegration screen across a basket of symbols (yfinance, keyless).
+
+    Tests every symbol pair that first clears a return-correlation pre-filter (cointegrated series
+    are almost always correlated, and the filter cuts the multiple-testing burden), then keeps the
+    pairs whose residual ADF stat passes the 5% Engle-Granger level, sorted strongest-first.
+
+    Multiple-testing honesty: with ``pairs_tested`` independent tests at the 5% level you expect
+    ~0.05·pairs_tested false positives, so the screen reports ``adf_crit_1pct`` too and the ``note``
+    flags that the strongest (most negative ``adf_stat``) / 1%-level hits are the robust ones — a
+    fake-precise Bonferroni p-value would over-claim (ADR-004/ADR-012). MEASURES candidates; the
+    decision to trade any pair is the caller's (Vizier).
+    """
+
+    symbols: list[str] = []  # the (clamped) universe actually screened
+    lookback_days: int
+    min_correlation: Decimal | None = None
+    pairs_tested: int | None = None  # pairs that cleared the correlation filter and were ADF-tested
+    adf_crit_5pct: Decimal | None = None
+    adf_crit_1pct: Decimal | None = None
+    pairs: list[PairCandidate] = []  # cointegrated pairs, most negative adf_stat first
+    as_of: date | None = None
+    source_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when one or more symbols couldn't be fetched (e.g. 'GLD unavailable: timeout') — "
+            "the screen runs on what fetched; the dropped symbols are named here."
+        ),
+    )
+    note: str | None = None

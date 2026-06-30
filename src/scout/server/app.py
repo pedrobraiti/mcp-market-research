@@ -1365,6 +1365,33 @@ async def cointegration_test(symbol_a: str, symbol_b: str, lookback_days: int = 
         return _err(exc)
 
 
+@mcp.tool()
+async def find_cointegrated_pairs(
+    symbols: list[str], lookback_days: int = 252, min_correlation: float = 0.5
+) -> dict:
+    """Screen a basket of symbols for cointegrated pairs (yfinance, keyless) — pairs discovery.
+
+    `cointegration_test` needs you to already know the pair; this finds them. Every pair that first
+    clears a return-correlation pre-filter (`min_correlation`, default 0.5 — cointegrated series are
+    almost always correlated, and the filter cuts the multiple-testing burden) is then ADF-tested;
+    the `pairs` that pass the 5% Engle-Granger level come back sorted strongest-first (most negative
+    `adf_stat`), each with hedge ratio, `spread_zscore` (how stretched now), and `half_life_days`.
+    **Multiple-testing honesty:** with `pairs_tested` tests at 5% you expect ~0.05·pairs_tested
+    false positives, so trust the most negative `adf_stat` / 1%-level hits, not marginal ones.
+    The universe is capped (each symbol is one fetch — a 429 risk); symbols that fail to fetch are
+    named in `source_status` and the screen runs on the rest. MEASURES candidates — the decision to
+    trade any pair is yours (ADR-004).
+    """
+    svc = services()
+    if svc.cointegration is None:
+        return _err(ValueError("Cointegration source is not configured."))
+    try:
+        result = await svc.cointegration.find_pairs(symbols, lookback_days, min_correlation)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
 def main() -> None:
     mcp.run()
 

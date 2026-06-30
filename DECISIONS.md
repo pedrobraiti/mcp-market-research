@@ -588,3 +588,29 @@ Scout (ADR-004 "measure, don't conclude"); the *decision* to trade the pair belo
 
 **Verified live.** GLD/IAU (two gold ETFs) adf −8.68, cointegrated, half-life 1.47d; KO/PEP and
 GLD/NVDA correctly NOT cointegrated. 244 tests, ruff clean.
+
+## ADR-024 — Cointegration screen (`find_cointegrated_pairs`)
+
+**Decision.** Add `find_cointegrated_pairs(symbols, lookback_days=252, min_correlation=0.5)` — pairs
+*discovery* on top of the `cointegration_test` primitive (ADR-023). For a basket, it tests every
+pair that first clears a return-correlation pre-filter and returns the cointegrated ones (residual
+ADF < the 5% level), sorted strongest-first, each with hedge ratio, spread z-score and half-life.
+
+**Why.** The primitive needs you to already know the pair; nobody knows a priori which of N names
+cointegrate — you *discover* them by screening. So the primitive alone was only half-useful for real
+pairs trading; the screen is what makes it actionable. It fits Scout cleanly (stateless, keyless,
+deterministic stats over price data) and reuses the exact same per-pair math (`_pair_stats`).
+
+**Choices that matter.**
+- **Correlation pre-filter.** Cointegrated series are almost always correlated, so filtering on
+  return correlation first skips implausible pairs AND cuts the multiple-testing burden cheaply.
+- **Multiple-testing honesty (ADR-012).** With `pairs_tested` tests at 5% you expect
+  ~0.05·pairs_tested false positives; the screen reports `pairs_tested` + the 1% critical value and a
+  `note` steering to the strongest / 1%-level hits, rather than fabricating a Bonferroni-corrected
+  p-value (which the stat-vs-critical-values approach can't honestly produce).
+- **Universe cap (rate-limit aware).** Every symbol is one yfinance fetch — a known 429 risk — so the
+  basket is clamped to `_MAX_UNIVERSE` (40) and a symbol that fails to fetch is named in
+  `source_status` while the screen runs on the rest (partial, never silently wrong).
+
+**Verified live.** A mixed basket (GLD/IAU/SGOL + NVDA/KO/PEP) returned exactly the three gold-ETF
+pairs (adf −8 to −11, half-life ~1d), correlation pre-filter cutting the rest. 248 tests, ruff clean.

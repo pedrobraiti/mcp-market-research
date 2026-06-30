@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT">
-  <img src="https://img.shields.io/badge/tools-61-orange" alt="61 tools">
+  <img src="https://img.shields.io/badge/tools-62-orange" alt="62 tools">
   <img src="https://img.shields.io/badge/status-live--validated-success" alt="Status: live-validated">
 </p>
 
@@ -21,7 +21,7 @@
 
 ## What this is
 
-**Scout** is an **MCP server** exposing **61 purpose-built tools** an AI agent calls to research a
+**Scout** is an **MCP server** exposing **62 purpose-built tools** an AI agent calls to research a
 company or market — quotes, fundamentals, technicals, options-implied volatility, SEC filings & XBRL
 financials, macro, news, sentiment and attention, plus a full **crypto spot** layer (quotes, OHLCV,
 on-chain network health, derivatives funding/OI, DVOL, DeFi TVL/stablecoins/yields, crypto macro and
@@ -78,7 +78,7 @@ across the tools below, then composes the result itself.
 an identifiable User-Agent) — without it the SEC tools (`filings`, `sec_financials`, `filing_search`)
 return a clear "please set it" message; everything else works keyless.
 
-## Tools (61)
+## Tools (62)
 
 **Discovery — find names, not just look them up**
 - `search_symbols(query, limit?)` — company name / partial ticker → symbols (the entry point).
@@ -123,6 +123,7 @@ return a clear "please set it" message; everything else works keyless.
 - `compare(symbols[], as_of?)` — several names side by side (price, multiples, margins, sector).
 - `correlation_matrix(symbols[], period?, as_of?)` — pairwise return correlation (real diversification).
 - `cointegration_test(symbol_a, symbol_b, lookback_days?)` — Engle-Granger **pairs/StatArb**: hedge ratio, residual ADF stat vs critical values, spread z-score, mean-reversion half-life.
+- `find_cointegrated_pairs(symbols[], lookback_days?, min_correlation?)` — **pairs discovery**: screen a basket (correlation pre-filter → ADF test), cointegrated pairs ranked strongest-first.
 - `classify(symbols[], as_of?)` — sector/industry/market-cap per symbol (to aggregate exposure).
 - `news_digest(symbols[], limit_per_symbol?)` — headlines across a watchlist, newest first.
 - `calendar(symbols[], as_of?)` — upcoming earnings & ex-dividend dates across symbols, sorted.

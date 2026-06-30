@@ -15,6 +15,7 @@ from .models import (
     AnalystView,
     BtcNetwork,
     CoinbasePremium,
+    CointegratedPairs,
     Cointegration,
     CommodityRatios,
     CompanySnapshot,
@@ -400,6 +401,12 @@ class CointegrationSource(Protocol):
         self, symbol_a: str, symbol_b: str, lookback_days: int = 252
     ) -> Cointegration:
         """Hedge ratio, residual ADF stat, spread z-score and half-life for a pair."""
+        ...
+
+    async def find_pairs(
+        self, symbols: list[str], lookback_days: int = 252, min_correlation: float = 0.5
+    ) -> CointegratedPairs:
+        """Screen a basket for cointegrated pairs (correlation pre-filter → ADF test)."""
         ...
 
 
