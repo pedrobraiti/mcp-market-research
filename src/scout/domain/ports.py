@@ -15,6 +15,7 @@ from .models import (
     AnalystView,
     BtcNetwork,
     CoinbasePremium,
+    Cointegration,
     CommodityRatios,
     CompanySnapshot,
     CotReport,
@@ -388,6 +389,17 @@ class FdaSource(Protocol):
 
     async def get_events(self, company: str, limit: int = 10) -> FdaEvents:
         """Approvals (drugsfda) and recalls (enforcement) for a sponsor name."""
+        ...
+
+
+@runtime_checkable
+class CointegrationSource(Protocol):
+    """Engle-Granger cointegration / pairs read for two symbols (keyless)."""
+
+    async def get_cointegration(
+        self, symbol_a: str, symbol_b: str, lookback_days: int = 252
+    ) -> Cointegration:
+        """Hedge ratio, residual ADF stat, spread z-score and half-life for a pair."""
         ...
 
 

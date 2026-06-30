@@ -519,3 +519,77 @@ def compute_technicals(
         annualization_factor=periods_per_year,
         bars_used=len(closes),
     )
+
+
+# --- Cointegration / pairs (Engle-Granger two-step) ------------------------------
+# StatArb primitive: is the spread between two price series mean-reverting (cointegrated)?
+# Step 1 — OLS hedge ratio (regress A on B). Step 2 — a Dickey-Fuller test on the residual spread.
+# We report the DF t-statistic against MacKinnon's asymptotic Engle-Granger critical values (the
+# RESIDUAL-based ones — more negative than a plain ADF because the spread is itself estimated)
+# rather than fabricating a precise p-value: that needs the full response surface, and a
+# fake-precise p-value is the "confidently mislabelled number" honesty-over-filling warns against.
+# Pure-python, stdlib only — same spirit as the rest of this module (no scipy/statsmodels).
+
+_MIN_OBS_FOR_COINTEGRATION = 30  # below this the DF regression is too short to mean anything
+# MacKinnon (1991) asymptotic critical values: constant, NO trend, ONE regressor (a single pair).
+EG_CRITICAL_VALUES: dict[str, float] = {"1pct": -3.90, "5pct": -3.34, "10pct": -3.04}
+
+
+def ols_with_intercept(y: list[float], x: list[float]) -> tuple[float, float] | None:
+    """Simple OLS of y on x with an intercept → (slope, intercept). None if x has zero variance."""
+    n = len(y)
+    if n < 2 or n != len(x):
+        return None
+    mean_x, mean_y = sum(x) / n, sum(y) / n
+    sxx = sum((xi - mean_x) ** 2 for xi in x)
+    if sxx == 0:
+        return None
+    sxy = sum((x[i] - mean_x) * (y[i] - mean_y) for i in range(n))
+    slope = sxy / sxx
+    return slope, mean_y - slope * mean_x
+
+
+def _df_regression(series: list[float]) -> tuple[float, float] | None:
+    """The Dickey-Fuller regression Δs_t = a + γ·s_{t-1} + ε (0 lags). Returns (gamma, t_stat).
+    A strongly NEGATIVE t_stat ⇒ the residual is stationary (the pair mean-reverts)."""
+    if len(series) < _MIN_OBS_FOR_COINTEGRATION:
+        return None
+    lagged = series[:-1]
+    delta = [series[i] - series[i - 1] for i in range(1, len(series))]
+    fit = ols_with_intercept(delta, lagged)
+    if fit is None:
+        return None
+    gamma, intercept = fit
+    n = len(delta)
+    mean_lag = sum(lagged) / n
+    sxx = sum((xi - mean_lag) ** 2 for xi in lagged)
+    dof = n - 2
+    if sxx <= 0 or dof <= 0:
+        return None
+    sse = sum((delta[i] - (intercept + gamma * lagged[i])) ** 2 for i in range(n))
+    variance = sse / dof
+    if variance <= 0:
+        return None
+    se_gamma = math.sqrt(variance / sxx)
+    if se_gamma == 0:
+        return None
+    return gamma, gamma / se_gamma
+
+
+def dickey_fuller_tstat(series: list[float]) -> float | None:
+    """Dickey-Fuller t-statistic for a residual spread (see ``_df_regression``)."""
+    result = _df_regression(series)
+    return result[1] if result else None
+
+
+def mean_reversion_half_life(series: list[float]) -> float | None:
+    """Half-life of mean reversion in observations: −ln2/γ from Δs_t = a + γ·s_{t-1} + ε.
+    None when the series doesn't revert (γ ≥ 0) or is too short — a non-reverting spread has no
+    meaningful half-life, so we return null rather than a negative/absurd number."""
+    result = _df_regression(series)
+    if result is None:
+        return None
+    gamma = result[0]
+    if gamma >= 0:
+        return None
+    return -math.log(2) / gamma

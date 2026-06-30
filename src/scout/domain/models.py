@@ -1453,3 +1453,47 @@ class CommodityRatios(BaseModel):
         ),
     )
     note: str | None = None
+
+
+class Cointegration(BaseModel):
+    """Engle-Granger cointegration / pairs read for two symbols (yfinance, keyless).
+
+    The StatArb primitive Scout lacked: is the spread between two price series mean-reverting?
+    Step 1 fits a hedge ratio (OLS of A on B); step 2 runs a Dickey-Fuller test on the residual
+    spread. ``adf_stat`` is the DF t-statistic — strongly NEGATIVE means stationary/cointegrated;
+    it is judged against MacKinnon's asymptotic Engle-Granger critical values (residual-based,
+    constant/no-trend, one regressor) carried in ``adf_crit_*``. We expose the statistic vs the
+    critical values rather than a fake-precise p-value (honesty over filling, ADR-004/ADR-012).
+
+    ``spread_zscore`` is the live trade signal — how many sigma the latest spread sits from its
+    own mean. ``half_life_days`` is the mean-reversion speed (−ln2/γ); null when the spread does
+    not revert. This MEASURES a relationship; the decision to trade the pair lives in Vizier.
+
+    Caveats (in ``note``): a non-augmented (0-lag) DF, yfinance split/div-adjusted closes (so the
+    series is consistent today but not a historical point-in-time vintage), and the asymptotic
+    critical values. A short overlap or a degenerate fit leaves the stats null with a ``note``;
+    a fetch failure sets ``source_status``.
+    """
+
+    symbol_a: str
+    symbol_b: str
+    lookback_days: int
+    n_obs: int | None = None  # overlapping daily closes actually used
+    hedge_ratio_beta: Decimal | None = None  # A ≈ beta·B + intercept (the hedge ratio)
+    spread_latest: Decimal | None = None  # most recent residual A − (beta·B + intercept)
+    spread_zscore: Decimal | None = None  # latest spread vs its own window (the trade signal)
+    adf_stat: Decimal | None = None  # Dickey-Fuller t-stat on the residual (more negative = revert)
+    adf_crit_1pct: Decimal | None = None
+    adf_crit_5pct: Decimal | None = None
+    adf_crit_10pct: Decimal | None = None
+    is_cointegrated: bool | None = None  # adf_stat < the 5% critical value (the standard threshold)
+    half_life_days: Decimal | None = None  # −ln2/γ; null when the spread doesn't mean-revert
+    as_of: date | None = None
+    source_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when a leg couldn't be reached (e.g. 'symbol_b unavailable: timeout') — so null "
+            "stats from a throttle distinguish from a genuine short/degenerate overlap."
+        ),
+    )
+    note: str | None = None

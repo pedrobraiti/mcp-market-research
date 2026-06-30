@@ -25,6 +25,7 @@ from ..adapters.onchain import OnChainNetwork
 from ..adapters.openfda import OpenFdaEvents
 from ..adapters.price_fallback import PriceFallbackMarketData
 from ..adapters.sec import SecEdgar
+from ..adapters.statarb import CointegrationAnalyzer
 from ..adapters.stooq import StooqPrices
 from ..adapters.treasury import TreasuryFiscal
 from ..adapters.web import WebExtractor
@@ -35,6 +36,7 @@ from ..config import Settings, get_settings
 from ..domain.ports import (
     AttentionSource,
     BtcNetworkSource,
+    CointegrationSource,
     CommodityRatioSource,
     ContentExtractor,
     CotSource,
@@ -88,6 +90,7 @@ class Services:
     stablecoin_peg: StablecoinPegSource | None = None
     fda: FdaSource | None = None
     commodity_ratios: CommodityRatioSource | None = None
+    cointegration: CointegrationSource | None = None
 
 
 def build_services(settings: Settings | None = None) -> Services:
@@ -98,6 +101,9 @@ def build_services(settings: Settings | None = None) -> Services:
 
     async def fetch_commodity_history(symbol: str):  # reuse the existing price path, no new client
         return await market_data.get_price_history(symbol, "1y", "1d")
+
+    async def fetch_pair_history(symbol: str):  # 2y covers lookbacks up to ~500 trading days
+        return await market_data.get_price_history(symbol, "2y", "1d")
 
     return Services(
         settings=settings,
@@ -135,4 +141,5 @@ def build_services(settings: Settings | None = None) -> Services:
         stablecoin_peg=CcxtStablecoinPeg(timeout=timeout),
         fda=OpenFdaEvents(timeout=timeout),
         commodity_ratios=CommodityRatioCalculator(fetch_commodity_history),
+        cointegration=CointegrationAnalyzer(fetch_pair_history),
     )

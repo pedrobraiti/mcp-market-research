@@ -1340,6 +1340,31 @@ async def commodity_ratios() -> dict:
         return _err(exc)
 
 
+@mcp.tool()
+async def cointegration_test(symbol_a: str, symbol_b: str, lookback_days: int = 252) -> dict:
+    """Engle-Granger cointegration / pairs read for two symbols (yfinance, keyless).
+
+    The StatArb primitive: is the spread between `symbol_a` and `symbol_b` mean-reverting? Step 1
+    fits a hedge ratio (`hedge_ratio_beta`, OLS of A on B); step 2 runs a Dickey-Fuller test on the
+    residual spread. `adf_stat` is the DF t-statistic — strongly NEGATIVE = stationary/cointegrated;
+    judge it against `adf_crit_1pct/5pct/10pct` (MacKinnon asymptotic Engle-Granger values), with
+    `is_cointegrated` flagging adf_stat < the 5% level. `spread_zscore` is the live signal (how many
+    sigma the latest spread sits from its mean) and `half_life_days` the mean-reversion speed (null
+    when the spread doesn't revert). `lookback_days` (default 252 ≈ 1y) sets the window over ~2y of
+    fetched daily closes. Caveats in `note`: a non-augmented (0-lag) DF and split/div-adjusted
+    closes. A short overlap leaves stats null with a `note`; a fetch failure sets `source_status`.
+    This MEASURES the relationship — the decision to trade the pair is the caller's (ADR-004).
+    """
+    svc = services()
+    if svc.cointegration is None:
+        return _err(ValueError("Cointegration source is not configured."))
+    try:
+        result = await svc.cointegration.get_cointegration(symbol_a, symbol_b, lookback_days)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
 def main() -> None:
     mcp.run()
 

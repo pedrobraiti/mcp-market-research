@@ -555,3 +555,36 @@ The LEVEL of copper/gold is arbitrary; the trend/z-score is the signal, so the t
   ("copper unavailable: timeout"); a missing/empty leg nulls its ratio with a `note`; the z-score is
   null below 30 aligned points (and below non-zero variance). Bellwethers that MEASURE, never a
   verdict (ADR-004).
+
+## ADR-023 — Cointegration / pairs primitive (`cointegration_test`)
+
+**Decision.** Add a keyless `cointegration_test(symbol_a, symbol_b, lookback_days=252)` tool — the
+StatArb primitive Scout lacked (it had correlation, but no cointegration/hedge-ratio/spread/mean-
+reversion). Engle-Granger two-step in **pure Python** (`scout.analytics`): OLS hedge ratio, then a
+Dickey-Fuller test on the residual spread; returns `hedge_ratio_beta`, `spread_latest`,
+`spread_zscore`, `adf_stat`, the three `adf_crit_*` values, `is_cointegrated`, `half_life_days`.
+New `statarb` adapter, `CointegrationSource` port, `Cointegration` model.
+
+**Why.** Pairs/relative-value mean-reversion is a whole capability the stack had nowhere. The
+*measurement* (is the spread stationary, how far is it now, how fast does it revert) belongs in
+Scout (ADR-004 "measure, don't conclude"); the *decision* to trade the pair belongs in Vizier.
+
+**Choices that matter.**
+- **No new heavy dependency.** Scout's analytics are deliberately pure-stdlib (probit via
+  `math.erf`, etc.). Pulling `statsmodels`/`scipy` for one tool would break that; the OLS + DF
+  regression + half-life are implemented in `analytics.py` in the same style. Reuses the existing
+  yfinance price path via an injected `fetch_pair_history` (2y daily), no new HTTP client.
+- **Statistic vs critical values, NOT a fake p-value.** A precise Engle-Granger p-value needs the
+  full MacKinnon response surface. Instead we report the DF t-stat against the **asymptotic**
+  MacKinnon critical values (constant, no trend, one regressor: −3.90/−3.34/−3.04) and flag
+  `is_cointegrated` at the 5% level. Honesty over a confidently-mislabelled p-value (ADR-012).
+- **Honest caveats in `note`.** Non-augmented (0-lag) DF; yfinance split/div-adjusted closes (the
+  series is consistent today but not a historical point-in-time vintage); `half_life` is null when
+  the spread doesn't revert (γ ≥ 0) rather than a negative/absurd number. Short overlap → stats null
+  with a note; a leg fetch failure → `source_status`.
+- **Reimplemented from the math, not lifted.** The idea was prompted by an external repo
+  (`Moreti2002/mcp-analytics`) that has no LICENSE; Engle-Granger / AR(1) half-life are public-domain
+  statistics, reimplemented from the formulas — no code copied.
+
+**Verified live.** GLD/IAU (two gold ETFs) adf −8.68, cointegrated, half-life 1.47d; KO/PEP and
+GLD/NVDA correctly NOT cointegrated. 244 tests, ruff clean.
