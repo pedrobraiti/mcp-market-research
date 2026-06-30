@@ -296,3 +296,36 @@ it can tell that apart from a genuine `not_found`. It extends the pattern FRED/G
   dropped sub-leg rather than returning a complete-looking subset.
 - **Safety = preventing failures, not limiting the user.** None of this blocks a deliberate choice;
   it only stops a data-source failure from masquerading as a fact.
+
+## ADR-013 — Macro source expansion: net liquidity, financial conditions, claims, nowcasts, VIX term structure, dollar, energy
+
+**Decision.** Broaden the FRED-backed `macro_context` from ~11 to ~34 series and add a matching set of
+derived regime transforms: **Fed net liquidity** (WALCL − TGA − RRP, plus WoW and a ~1y weekly z-score),
+**financial-conditions** tightness (NFCI > 0), the **jobless-claims** 4-week-average YoY, the **CFNAI-MA3
+recession signal** (< −0.70), the **VIX term structure** (VXV/VIX, with a backwardation flag), **5y5y
+forward inflation**, **M2 YoY**, a **broad-USD z-score**, and the **Brent−WTI** crude spread. New raw
+levels (initial/continued claims, GDPNow, SOFR, nat-gas, copper, OVX/GVZ, STLFSI4, WEI…) surface
+automatically in `indicators[]`; the `derived` block holds only transforms.
+
+**Why.** The original macro read covered rates/curve/labour/inflation/VIX but missed the liquidity and
+financial-conditions axis that drives risk assets between fundamentals prints. Net liquidity in
+particular is a headline macro driver and is trivially keyless on FRED. All additions stay on the free,
+no-key `fredgraph.csv` path — **no new API key, no `.env` change**.
+
+**Choices that matter.**
+- **Derived = transforms, never raw levels.** Raw series already appear in `indicators[]`; duplicating
+  them in `derived` would be redundant. `derived` carries ratios/spreads/z-scores/YoY/boolean signals.
+- **Net-liquidity unit alignment (the load-bearing gotcha).** WALCL and WTREGEN are in **$ millions**;
+  RRPONTSYD is in **$ billions**. RRP is scaled **×1000** before subtracting, or the result is off by
+  three orders of magnitude. The net series is built on WALCL's weekly dates, carrying the latest TGA/RRP
+  forward to each date; a `notes` line records this mixed-frequency caveat.
+- **Honesty over filling (ADR-012 / ADR-004 preserved).** Each field is null — never a fake number — when
+  its series is missing or too short (≥2 weekly points for net-liquidity WoW, ≥8 for its z-score, ≥13
+  monthly for M2 YoY, ≥53 weekly for claims YoY, ≥30 daily for the dollar z-score). Still measures, not a
+  "risk-on" verdict.
+- **Concurrent-fetch count rises ~11→~34.** Acceptable: fetches are concurrent (`asyncio.gather`), and a
+  throttled/failed series degrades per-series via ADR-012 (`unavailable: …` status) instead of failing the
+  call or vanishing.
+- **Copper/gold ratio deliberately deferred.** FRED's gold fixing series were discontinued, so a
+  copper-gold ratio belongs on the yfinance price path, not this FRED-only adapter. Copper level
+  (`PCOPPUSDM`) is still surfaced raw.

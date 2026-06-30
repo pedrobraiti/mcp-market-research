@@ -393,6 +393,18 @@ class MacroDerived(BaseModel):
     real_10y_exante: Decimal | None = None  # 10y TIPS real yield (ex-ante real rate), %
     credit_spread_hy: Decimal | None = None  # US high-yield OAS, % (financial-stress gauge)
     credit_spread_hy_zscore: Decimal | None = None  # HY spread vs its ~1y window (stress regime)
+    net_liquidity: Decimal | None = None  # Fed net liquidity: WALCL − TGA − RRP, in $M
+    net_liquidity_wow: Decimal | None = None  # week-over-week change in net liquidity, $M
+    net_liquidity_zscore: Decimal | None = None  # net liquidity vs its ~1y weekly window
+    financial_conditions_tight: bool | None = None  # Chicago Fed NFCI > 0 (tighter than average)
+    initial_claims_4wk_yoy: Decimal | None = None  # IC4WSA 4-week-avg claims YoY change, in %
+    cfnai_recession_signal: bool | None = None  # CFNAIMA3 < −0.70 (Chicago Fed recession threshold)
+    vix_term_structure: Decimal | None = None  # VXV/VIX (3M/1M); < 1 = backwardation (acute stress)
+    vix_backwardation: bool | None = None  # VIX term structure < 1.0
+    inflation_5y5y: Decimal | None = None  # 5y5y forward inflation expectation (T5YIFR), %
+    m2_yoy: Decimal | None = None  # M2 money stock YoY growth, %
+    dollar_broad_zscore: Decimal | None = None  # broad nominal USD index vs its ~1y window
+    brent_wti_spread: Decimal | None = None  # Brent − WTI crude, $/bbl (global-vs-US crude stress)
     notes: list[str] = []
 
 

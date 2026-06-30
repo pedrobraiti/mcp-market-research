@@ -40,11 +40,43 @@ _SERIES: tuple[tuple[str, str], ...] = (
     ("T10YIE", "10-Year Breakeven Inflation (%)"),
     ("DFII10", "10-Year TIPS Real Yield (%)"),
     ("BAMLH0A0HYM2", "US High-Yield Credit Spread (OAS, %)"),
+    # --- Macro source expansion (ADR-013): liquidity, financial conditions, labour,
+    # nowcasts, the VIX term structure, the dollar and energy. All keyless fredgraph CSV.
+    ("WALCL", "Fed Total Assets ($M, weekly)"),
+    ("WTREGEN", "Treasury General Account ($M, weekly)"),
+    ("RRPONTSYD", "Overnight Reverse Repo ($B, daily)"),
+    ("NFCI", "Chicago Fed Financial Conditions Index"),
+    ("STLFSI4", "St. Louis Fed Financial Stress Index"),
+    ("ICSA", "Initial Jobless Claims (SA)"),
+    ("IC4WSA", "Initial Jobless Claims 4-Week Avg (SA)"),
+    ("CCSA", "Continued Jobless Claims (SA)"),
+    ("GDPNOW", "Atlanta Fed GDPNow (% nowcast)"),
+    ("CFNAI", "Chicago Fed National Activity Index"),
+    ("CFNAIMA3", "CFNAI 3-Month Average"),
+    ("WEI", "Weekly Economic Index (Lewis-Mertens-Stock)"),
+    ("VXVCLS", "VIX 3-Month (VXV)"),
+    ("T5YIFR", "5y5y Forward Inflation Expectation (%)"),
+    ("M2SL", "M2 Money Stock ($B, monthly)"),
+    ("SOFR", "Secured Overnight Financing Rate (%)"),
+    ("DTWEXBGS", "Nominal Broad USD Index"),
+    ("DCOILBRENTEU", "Brent Crude ($/bbl)"),
+    ("DCOILWTICO", "WTI Crude ($/bbl)"),
+    ("DHHNGSP", "Henry Hub Natural Gas ($/MMBtu)"),
+    ("PCOPPUSDM", "Global Copper ($/tonne, monthly)"),
+    ("OVXCLS", "Crude Oil Volatility (OVX)"),
+    ("GVZCLS", "Gold Volatility (GVZ)"),
 )
 
 _VIX_WINDOW = 252  # ~1 trading year for the VIX regime z-score/percentile
 _CREDIT_WINDOW = 252  # ~1 trading year for the credit-spread regime z-score
 _CPI_YOY_MIN_MONTHS = 13  # need a year-ago observation to compute YoY
+_NET_LIQ_WINDOW = 52  # ~1 year of weekly net-liquidity points for the z-score
+_NET_LIQ_MIN_ZSCORE_WEEKS = 8  # min weekly points before a net-liquidity z-score is meaningful
+_DOLLAR_WINDOW = 252  # ~1 trading year for the broad-USD z-score
+_DOLLAR_MIN_POINTS = 30  # min daily points before a dollar z-score is meaningful
+_M2_YOY_MIN_MONTHS = 13  # need a year-ago monthly observation for M2 YoY
+_CLAIMS_YOY_MIN_WEEKS = 53  # need a year-ago weekly observation for jobless-claims YoY
+_CFNAI_RECESSION_THRESHOLD = -0.70  # Chicago Fed CFNAI-MA3 recession-signal level
 
 
 def _parse_value(raw: str) -> Decimal | None:
@@ -239,6 +271,81 @@ def _derive(series: dict[str, list[tuple[date, Decimal]]]) -> MacroDerived:
             window = [float(v) for _, v in credit][-_CREDIT_WINDOW:]
             z = zscore_of_last(window)
             derived.credit_spread_hy_zscore = _round(z, 2)
+
+    # Fed net liquidity = WALCL − TGA − RRP. UNIT GOTCHA: WALCL and WTREGEN are in $ MILLIONS,
+    # but RRPONTSYD is in $ BILLIONS — multiply RRP by 1000 to bring it to $M before subtracting,
+    # or the result is off by three orders of magnitude. The net series is built on WALCL's
+    # (weekly) observation dates, carrying the most recent TGA/RRP value forward to each date.
+    walcl = series.get("WALCL")
+    treasury_account = series.get("WTREGEN")
+    reverse_repo = series.get("RRPONTSYD")
+    if walcl and treasury_account and reverse_repo:
+        net_series: list[float] = []
+        for observation_date, total_assets in walcl:
+            tga = _value_on_or_before(treasury_account, observation_date)
+            rrp = _value_on_or_before(reverse_repo, observation_date)
+            if tga is None or rrp is None:
+                continue
+            net_series.append(float(total_assets) - float(tga) - float(rrp) * 1000)
+        if net_series:
+            derived.net_liquidity = _round(net_series[-1], 0)
+            notes.append(
+                "net_liquidity: WALCL − TGA − RRP, mixing the weekly balance-sheet/TGA prints with "
+                "the daily RRP carried forward to each WALCL date; RRP (in $B) is scaled ×1000 to "
+                "the $M unit of WALCL/TGA."
+            )
+        if len(net_series) >= 2:
+            derived.net_liquidity_wow = _round(net_series[-1] - net_series[-2], 0)
+        if len(net_series) >= _NET_LIQ_MIN_ZSCORE_WEEKS:
+            z = zscore_of_last(net_series[-_NET_LIQ_WINDOW:])
+            derived.net_liquidity_zscore = _round(z, 2)
+
+    nfci = series.get("NFCI")
+    if nfci:
+        # NFCI is already standardized (mean 0); positive = tighter-than-average conditions.
+        derived.financial_conditions_tight = float(nfci[-1][1]) > 0
+
+    claims_4wk = series.get("IC4WSA")
+    if claims_4wk and len(claims_4wk) >= _CLAIMS_YOY_MIN_WEEKS:
+        latest_date, latest_value = claims_4wk[-1]
+        year_ago = _value_on_or_before(claims_4wk, latest_date - timedelta(days=365))
+        if year_ago and year_ago != 0:
+            derived.initial_claims_4wk_yoy = _round(
+                (float(latest_value) / float(year_ago) - 1) * 100, 2
+            )
+
+    cfnai_ma3 = series.get("CFNAIMA3")
+    if cfnai_ma3:
+        derived.cfnai_recession_signal = float(cfnai_ma3[-1][1]) < _CFNAI_RECESSION_THRESHOLD
+
+    vxv = series.get("VXVCLS")
+    if vxv and vix:
+        vix_latest = float(vix[-1][1])
+        if vix_latest > 0:
+            ratio = float(vxv[-1][1]) / vix_latest
+            derived.vix_term_structure = _round(ratio, 2)
+            derived.vix_backwardation = ratio < 1.0
+
+    forward_inflation = series.get("T5YIFR")
+    if forward_inflation:
+        derived.inflation_5y5y = _round(float(forward_inflation[-1][1]), 2)
+
+    m2 = series.get("M2SL")
+    if m2 and len(m2) >= _M2_YOY_MIN_MONTHS:
+        latest_date, latest_value = m2[-1]
+        year_ago = _value_on_or_before(m2, latest_date - timedelta(days=365))
+        if year_ago and year_ago != 0:
+            derived.m2_yoy = _round((float(latest_value) / float(year_ago) - 1) * 100, 2)
+
+    dollar = series.get("DTWEXBGS")
+    if dollar and len(dollar) >= _DOLLAR_MIN_POINTS:
+        window = [float(v) for _, v in dollar][-_DOLLAR_WINDOW:]
+        derived.dollar_broad_zscore = _round(zscore_of_last(window), 2)
+
+    brent = series.get("DCOILBRENTEU")
+    wti = series.get("DCOILWTICO")
+    if brent and wti:
+        derived.brent_wti_spread = _round(float(brent[-1][1]) - float(wti[-1][1]), 2)
 
     derived.notes = notes
     return derived
