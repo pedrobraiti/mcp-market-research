@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT">
-  <img src="https://img.shields.io/badge/tools-53-orange" alt="53 tools">
+  <img src="https://img.shields.io/badge/tools-61-orange" alt="61 tools">
   <img src="https://img.shields.io/badge/status-live--validated-success" alt="Status: live-validated">
 </p>
 
@@ -21,7 +21,7 @@
 
 ## What this is
 
-**Scout** is an **MCP server** exposing **53 purpose-built tools** an AI agent calls to research a
+**Scout** is an **MCP server** exposing **61 purpose-built tools** an AI agent calls to research a
 company or market — quotes, fundamentals, technicals, options-implied volatility, SEC filings & XBRL
 financials, macro, news, sentiment and attention, plus a full **crypto spot** layer (quotes, OHLCV,
 on-chain network health, derivatives funding/OI, DVOL, DeFi TVL/stablecoins/yields, crypto macro and
@@ -78,7 +78,7 @@ across the tools below, then composes the result itself.
 an identifiable User-Agent) — without it the SEC tools (`filings`, `sec_financials`, `filing_search`)
 return a clear "please set it" message; everything else works keyless.
 
-## Tools (53)
+## Tools (61)
 
 **Discovery — find names, not just look them up**
 - `search_symbols(query, limit?)` — company name / partial ticker → symbols (the entry point).
@@ -97,7 +97,8 @@ return a clear "please set it" message; everything else works keyless.
 - `sec_financials(symbol, as_of?)` — **authoritative** annual financials from SEC XBRL (cross-check `fundamentals`).
 - `filings(symbol, form_type?, limit?, as_of?)` — recent SEC EDGAR filings (10-K/10-Q/8-K …) with links.
 - `earnings(symbol, as_of?)` — next earnings date + history (estimate / actual / surprise).
-- `ownership(symbol)` — insider & institution %, top institutions, recent insider trades (13F/Form 4).
+- `ownership(symbol)` — insider & institution %, top institutions, recent insider trades, **short interest** (days-to-cover, % of float, % change).
+- `fda_events(company, limit?)` — FDA drug approvals + recalls for a sponsor (**openFDA**) — pharma/biotech catalysts.
 
 **Price & technicals**
 - `price_history(symbol, period?, interval?, as_of?)` — OHLCV bars.
@@ -112,13 +113,16 @@ return a clear "please set it" message; everything else works keyless.
 - `wikipedia_attention(article, days?)` — daily Wikipedia pageviews — an attention proxy.
 
 **Macro**
-- `macro_context(as_of?)` — key US macro (**FRED**): Fed Funds, 10Y/2Y yields & spread, unemployment, CPI, VIX.
+- `macro_context(as_of?)` — key US macro (**FRED**) + a rich `derived` block: rates/curve/CPI/VIX, plus **Fed net liquidity** (WALCL−TGA−RRP), financial-conditions (NFCI/STLFSI4), jobless claims, growth nowcasts (GDPNow/CFNAI), VIX term structure, 5y5y forward, M2 YoY, SOFR, broad dollar, Brent-WTI, Sahm gap & recession probit.
+- `cot_positioning(market, weeks?)` — CFTC **Commitments of Traders**: speculator vs commercial net positioning, % of OI, week-over-week change, crowding z-score.
+- `commodity_ratios()` — macro bellwethers **copper/gold** (Dr. Copper, risk appetite) and **gold/silver**, with z-scores (yfinance).
 - `world_macro(country?, codes?)` — country-level macro (**World Bank**): GDP, inflation, unemployment…
 - `treasury_data()` — official **US Treasury** figures: total public debt, average interest rates.
 
 **Multi-symbol / portfolio (batch, stateless)**
 - `compare(symbols[], as_of?)` — several names side by side (price, multiples, margins, sector).
 - `correlation_matrix(symbols[], period?, as_of?)` — pairwise return correlation (real diversification).
+- `cointegration_test(symbol_a, symbol_b, lookback_days?)` — Engle-Granger **pairs/StatArb**: hedge ratio, residual ADF stat vs critical values, spread z-score, mean-reversion half-life.
 - `classify(symbols[], as_of?)` — sector/industry/market-cap per symbol (to aggregate exposure).
 - `news_digest(symbols[], limit_per_symbol?)` — headlines across a watchlist, newest first.
 - `calendar(symbols[], as_of?)` — upcoming earnings & ex-dividend dates across symbols, sorted.
@@ -140,6 +144,8 @@ return a clear "please set it" message; everything else works keyless.
 - `crypto_onchain(asset?)` — network health: BTC fees/hashrate (**mempool.space**), ETH gas/addresses (**Blockscout**).
 - `crypto_derivatives(symbol)` — perp funding rate & open interest across **Binance/Bybit/OKX** (positioning context).
 - `crypto_implied_vol(asset?)` — the **Deribit** DVOL index ("crypto VIX") for BTC/ETH + history.
+- `coinbase_premium(symbol?, days?)` — US-spot (Coinbase) vs offshore (Binance) premium — institutional/US demand tell (CCXT).
+- `btc_network()` — BTC base-layer: hash rate, miner revenue, **NVT** (real, on-chain settlement) + live fee market & difficulty (**Blockchain.com** + **mempool.space**).
 - `crypto_fear_greed(days?)` — the Crypto Fear & Greed Index (0-100) + history (**alternative.me**).
 - `crypto_buzz(symbol?, limit?)` — Reddit crypto mention buzz (**ApeWisdom** `all-crypto`).
 
@@ -148,6 +154,8 @@ return a clear "please set it" message; everything else works keyless.
 - `crypto_sectors()` — per-category (L1/DeFi/AI/memecoin…) performance (**CoinGecko**).
 - `defi_overview(slug?)` — DeFi TVL by chain, or one protocol's breakdown (**DefiLlama**).
 - `stablecoin_supply()` — stablecoin circulation & peg status (**DefiLlama**) — liquidity/systemic-risk read.
+- `stablecoin_peg(symbols?, venue?)` — USDT/USDC/DAI deviation from $1 in basis points + depeg flag (**Kraken/CCXT**) — the price/peg axis.
+- `defi_fees(protocol?)` — protocol **fees & revenue** (cash-flow fundamentals): total + top-N, or one protocol (**DefiLlama**).
 - `defi_yields(chain?, project?, min_tvl?)` — yield/APY pools, filterable (**DefiLlama**).
 
 **Web**

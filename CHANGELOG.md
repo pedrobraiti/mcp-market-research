@@ -6,6 +6,40 @@ dates anchor the entries.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-06-30
+
+Eight new keyless tools (53 → 61) plus a major macro expansion, all free/keyless and following the
+source-honesty convention (a throttle surfaces as `unavailable: …`, never a fabricated reading).
+
+### Added
+- **Macro expansion in `macro_context`** (ADR-013): 23 new keyless FRED series (11 → 34) and 12
+  derived transforms — **Fed net liquidity** (WALCL − TGA − RRP), financial-conditions (NFCI,
+  STLFSI4), jobless claims, growth nowcasts (GDPNow, CFNAI), VIX term structure, 5y5y forward,
+  M2 YoY, SOFR, broad dollar, Brent-WTI spread.
+- **Short interest** folded into `ownership` (ADR-014): shares short, days-to-cover, % of float,
+  % of shares outstanding, and the month-over-month change (yfinance).
+- **`cot_positioning`** (ADR-015): CFTC Commitments of Traders — speculator/commercial net
+  positioning, % of open interest, week-over-week change and a crowding z-score (keyless Socrata).
+- **`coinbase_premium`** (ADR-016): US-spot (Coinbase) vs offshore (Binance) premium + z-score (CCXT).
+- **`stablecoin_peg`** (ADR-017): USDT/USDC/DAI deviation from $1 in bps + depeg flag (Kraken/CCXT).
+- **`btc_network`** (ADR-018): BTC base-layer fundamentals — hash rate, miner revenue, real NVT
+  (on-chain settlement volume) — plus the live fee market and difficulty (Blockchain.com +
+  mempool.space), composed with per-source `partial` honesty.
+- **`defi_fees`** (ADR-019): protocol fees & revenue (cash-flow fundamentals), total + top-N or a
+  single protocol (DefiLlama).
+- **`fda_events`** (ADR-020): FDA drug approvals + recalls for a sponsor (openFDA) — pharma/biotech
+  catalysts.
+- **`commodity_ratios`** (ADR-022): copper/gold (Dr. Copper) and gold/silver bellwethers with
+  z-scores (yfinance).
+- **`cointegration_test`** (ADR-023): Engle-Granger pairs/StatArb — hedge ratio, residual ADF stat
+  vs MacKinnon critical values, spread z-score and mean-reversion half-life (pure-Python, no
+  scipy/statsmodels).
+
+### Notes
+- `clinical_trials` (ClinicalTrials.gov v2) was built then withdrawn: the host blocks by TLS
+  client fingerprint (curl 200 / httpx 403), so a clean keyless integration isn't possible without
+  browser-impersonation. Recorded in ADR-021 so it isn't re-attempted blind.
+
 ## [0.4.1] — 2026-06-28
 
 ### Fixed
