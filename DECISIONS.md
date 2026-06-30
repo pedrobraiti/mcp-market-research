@@ -378,3 +378,51 @@ already present and is a recognised contrarian-at-extremes input.
   below 8 weekly points; fields are null, never fabricated, when a record omits them.
 - **Point-in-time.** Positions are as of the Tuesday, published the following Friday (~3-day lag);
   `as_of` is the report's settlement date, stated in `note`. Reuses `analytics.zscore_of_last`.
+
+## ADR-016 — Coinbase/Binance spot premium (`coinbase_premium`)
+
+**Decision.** Add a keyless `coinbase_premium` tool: the gap between US-spot (Coinbase, `<SYM>/USD`)
+and offshore (Binance, `<SYM>/USDT`) price, `premium = (US-spot − offshore)/offshore × 100`.
+Input: `symbol` (base asset, default "BTC"; "ETH" etc.), `days` (1..90, default 30). Returns the
+latest `coinbase_price`/`binance_price`/`premium_pct`, a daily premium `history` (timestamp
+intersection of both venues' `1d` OHLCV closes), and `premium_zscore` (`analytics.zscore_of_last`
+over the series, null below 8 points). Positive premium = aggressive US/institutional buying (the
+ETF bid tell); negative = US selling. Paywalled elsewhere (CryptoQuant); here it is arithmetic on
+two prices Scout already fetches.
+
+**Why.** It is the single best keyless read of US/institutional demand vs the offshore market, and
+it is pure composition over existing CCXT spot data — no new source, no key. It is a positioning
+tell, not a price, so it is verdict-free (ADR-004): the agent reads the sign/size and concludes.
+
+**Choices that matter.**
+- **Two venues, two shared exchanges (reuse, not bypass).** Composes TWO `CcxtMarketData`
+  instances (coinbase/USD, binance/USDT), each keeping its own shared, rate-limited exchange (the
+  Session-7 anti-429-fan-out instance) — never a fresh per-call ccxt object.
+- **Honesty over filling (ADR-012).** A throttle/timeout on EITHER leg → `source_status:
+  unavailable: <reason>` with a null premium (it cannot be computed honestly from one price), never
+  a fabricated number. A symbol simply **not listed** on a venue (a ccxt `BadSymbol`, non-transient)
+  is a distinct outcome: empty + a `note`, no `source_status` — so "venue doesn't carry it" is told
+  apart from "couldn't fetch". The z-score is null below 8 daily points.
+- **Binance is reachable from this machine** (verified live, not geo-blocked); live premium ≈ −0.14%.
+
+## ADR-017 — Stablecoin peg deviation (`stablecoin_peg`)
+
+**Decision.** Add a keyless `stablecoin_peg` tool: each major stablecoin's deviation from its $1
+peg, read as `<SYM>/USD` spot on **Kraken** (which lists USDT, USDC and DAI vs USD). Input:
+`symbols` (default `["USDT","USDC","DAI"]`) and an optional `venue` override (default kraken). Per
+coin returns `price`, `deviation_bps = (price − 1) × 10000`, and a `depeg` flag set when
+`|deviation_bps|` exceeds the module constant `_DEPEG_BPS_THRESHOLD = 50`. This is the PRICE axis of
+stablecoin health — a depeg is a market-wide tail trigger.
+
+**Why.** Scout already has `stablecoin_supply` (the SUPPLY axis, DefiLlama circulation); peg price
+is the orthogonal, additive read it lacks. It is keyless CCXT spot — no new source. Raw basis-point
+deviation + a flag, not a verdict (ADR-004).
+
+**Choices that matter.**
+- **Kraken default, reuse the shared exchange.** Reuses `CcxtMarketData` (with its shared,
+  rate-limited exchange) via an injected factory; an optional `venue` override builds/caches a
+  per-venue instance, still through the same machinery — never a bypass.
+- **Honesty over filling (ADR-012).** A fetch failure (throttle/timeout) → `source_status:
+  unavailable: <reason>`, so a missing price reads as "unavailable", not a real $0/peg. A symbol
+  **not listed** on the venue (a ccxt `BadSymbol`, non-transient) is omitted from `items` with a
+  `note` — distinct from a throttle. No magic number: the 50-bps depeg threshold is a named constant.

@@ -13,6 +13,7 @@ from typing import Protocol, runtime_checkable
 
 from .models import (
     AnalystView,
+    CoinbasePremium,
     CompanySnapshot,
     CotReport,
     CryptoAssetProfile,
@@ -46,6 +47,7 @@ from .models import (
     QualityMetrics,
     RetailBuzz,
     SecFinancials,
+    StablecoinPeg,
     StablecoinSupply,
     SymbolSearch,
     TreasuryData,
@@ -299,6 +301,26 @@ class CryptoDerivativesSource(Protocol):
 
     async def get_derivatives(self, base: str) -> CryptoDerivatives:
         """Funding rate + open interest per venue for a base asset."""
+        ...
+
+
+@runtime_checkable
+class CryptoPremiumSource(Protocol):
+    """US-spot vs offshore price premium (Coinbase USD vs Binance USDT) — a demand tell."""
+
+    async def get_premium(self, symbol: str = "BTC", days: int = 30) -> CoinbasePremium:
+        """Latest premium + a daily premium series (with its z-score) for a base asset."""
+        ...
+
+
+@runtime_checkable
+class StablecoinPegSource(Protocol):
+    """Stablecoin price deviation from the $1 peg (the PRICE axis; complements supply)."""
+
+    async def get_peg(
+        self, symbols: list[str] | None = None, venue: str | None = None
+    ) -> StablecoinPeg:
+        """Per-stablecoin price + basis-point deviation from $1 + a depeg flag, on one venue."""
         ...
 
 

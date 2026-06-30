@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from ..adapters.alternative import AlternativeFearGreed
 from ..adapters.apewisdom import ApeWisdomBuzz
-from ..adapters.ccxt import CcxtMarketData
+from ..adapters.ccxt import CcxtMarketData, CcxtPremium, CcxtStablecoinPeg
 from ..adapters.cftc import CftcPositioning
 from ..adapters.coingecko import CoinGeckoMacro
 from ..adapters.coinpaprika import CoinpaprikaAssets
@@ -38,6 +38,7 @@ from ..domain.ports import (
     CryptoMacroSource,
     CryptoMarketDataSource,
     CryptoOnChainSource,
+    CryptoPremiumSource,
     CryptoSentimentSource,
     CryptoVolSource,
     DefiSource,
@@ -47,6 +48,7 @@ from ..domain.ports import (
     MarketDataSource,
     NewsSearchSource,
     RetailBuzzSource,
+    StablecoinPegSource,
     TreasurySource,
     WorldMacroSource,
 )
@@ -75,6 +77,8 @@ class Services:
     crypto_vol: CryptoVolSource | None = None
     defi: DefiSource | None = None
     crypto_macro: CryptoMacroSource | None = None
+    crypto_premium: CryptoPremiumSource | None = None
+    stablecoin_peg: StablecoinPegSource | None = None
 
 
 def build_services(settings: Settings | None = None) -> Services:
@@ -110,4 +114,9 @@ def build_services(settings: Settings | None = None) -> Services:
         crypto_vol=DeribitVol(timeout=timeout),
         defi=DefiLlamaDefi(timeout=timeout),
         crypto_macro=CoinGeckoMacro(timeout=timeout),
+        crypto_premium=CcxtPremium(
+            us_market=CcxtMarketData(exchange="coinbase", quote_ccy="USD", timeout=timeout),
+            offshore_market=CcxtMarketData(exchange="binance", quote_ccy="USDT", timeout=timeout),
+        ),
+        stablecoin_peg=CcxtStablecoinPeg(timeout=timeout),
     )

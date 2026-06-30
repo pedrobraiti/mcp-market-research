@@ -1004,6 +1004,37 @@ class CryptoImpliedVol(BaseModel):
     note: str | None = None
 
 
+class PremiumPoint(BaseModel):
+    """One day of the US-spot vs offshore premium series."""
+
+    date: date
+    premium_pct: Decimal | None = None
+
+
+class CoinbasePremium(BaseModel):
+    """The Coinbase (US-spot, USD) vs Binance (offshore, USDT) price gap — a demand/positioning
+    tell, NOT a price. Positive = aggressive US buying (the ETF/institutional bid); negative = US
+    selling pressure. Arithmetic on two spot prices Scout can already fetch; paywalled elsewhere.
+    """
+
+    symbol: str  # base asset, e.g. "BTC"
+    coinbase_price: Decimal | None = None  # US-spot last (<SYM>/USD on Coinbase)
+    binance_price: Decimal | None = None  # offshore last (<SYM>/USDT on Binance)
+    premium_pct: Decimal | None = None  # (coinbase − binance) / binance × 100
+    premium_zscore: Decimal | None = None  # z-score of the latest daily premium vs its window
+    history: list[PremiumPoint] = []
+    as_of: datetime | None = None
+    source_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when a venue could not be fetched (e.g. 'unavailable: rate_limited') — the "
+            "premium can't be computed honestly from one leg, so the figures read as "
+            "'unavailable', not real zeros. None means both venues were fetched OK."
+        ),
+    )
+    note: str | None = None
+
+
 # --- Crypto Tier 3: DeFi, stablecoins, yields, macro, sectors ------------------------------
 
 
@@ -1035,6 +1066,35 @@ class StablecoinSupply(BaseModel):
 
     total_circulating_usd: Decimal | None = None
     items: list[StablecoinItem] = []
+
+
+class StablecoinPegItem(BaseModel):
+    """One stablecoin's deviation from its $1 peg on a venue (the PRICE axis)."""
+
+    symbol: str  # e.g. "USDT"
+    venue: str  # exchange the price was read from, e.g. "kraken"
+    price: Decimal | None = None  # <SYM>/USD last
+    deviation_bps: Decimal | None = None  # (price − 1) × 10000; basis points off the $1 peg
+    depeg: bool = False  # |deviation_bps| > the depeg threshold (50 bps)
+
+
+class StablecoinPeg(BaseModel):
+    """Major stablecoins' deviation from $1 — the peg-stress / risk-off plumbing read.
+
+    The PRICE axis (a depeg is a market-wide tail trigger), complementing the SUPPLY axis of
+    `stablecoin_supply`. Raw basis-point deviation per coin + a depeg flag; not a verdict.
+    """
+
+    items: list[StablecoinPegItem] = []
+    as_of: datetime | None = None
+    source_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when a fetch failed (e.g. 'unavailable: rate_limited') — so a missing price reads "
+            "as 'unavailable', not a real zero. None means the reads completed."
+        ),
+    )
+    note: str | None = None
 
 
 class YieldPool(BaseModel):

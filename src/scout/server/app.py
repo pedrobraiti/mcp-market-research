@@ -1035,6 +1035,52 @@ async def crypto_derivatives(symbol: str) -> dict:
 
 
 @mcp.tool()
+async def coinbase_premium(symbol: str = "BTC", days: int = 30) -> dict:
+    """Coinbase (US-spot, USD) vs Binance (offshore, USDT) price premium — a demand tell.
+
+    `premium = (Coinbase US-spot − Binance offshore) / offshore × 100`. **Positive** = aggressive US
+    buying (the ETF/institutional bid tell); **negative** = US selling pressure. This is NOT a price
+    — it is a crowding/positioning read that's paywalled elsewhere (CryptoQuant), here just
+    arithmetic on two spot prices. `symbol` is a base asset ("BTC", "ETH"); `days` (1..90, default
+    30) sizes the daily premium history used for `premium_zscore` (how stretched today's premium is
+    vs its own recent range; null under ~8 days). If a venue can't be fetched, `source_status` is
+    `unavailable: …` and the premium is null (never faked from one leg); a symbol not listed on a
+    venue returns empty with a `note`.
+    """
+    svc = services()
+    if svc.crypto_premium is None:
+        return _err(ValueError("Crypto premium source is not configured."))
+    try:
+        result = await svc.crypto_premium.get_premium(symbol, int(days))
+        return _ok(result.model_dump(mode="json"))
+    except ValueError as exc:
+        return _err(exc)
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def stablecoin_peg(symbols: list[str] | None = None, venue: str | None = None) -> dict:
+    """Stablecoin deviation from the $1 peg — peg-stress / risk-off plumbing (the PRICE axis).
+
+    For each stablecoin (default USDT, USDC, DAI) returns its `price`, `deviation_bps` (basis points
+    off $1 = `(price − 1) × 10000`) and a `depeg` flag (set when |deviation| > 50 bps). A depeg is a
+    market-wide tail trigger. Venue is fixed to **kraken** (lists all three vs USD) unless `venue`
+    overrides it. This is the PRICE axis, complementing `stablecoin_supply` (the SUPPLY axis) — they
+    are additive, not duplicative. A symbol not listed on the venue is omitted with a `note`; a
+    fetch failure sets `source_status: unavailable: …`. Raw deviations, not a verdict.
+    """
+    svc = services()
+    if svc.stablecoin_peg is None:
+        return _err(ValueError("Stablecoin peg source is not configured."))
+    try:
+        result = await svc.stablecoin_peg.get_peg(symbols, venue)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def crypto_implied_vol(asset: str = "BTC") -> dict:
     """The Deribit DVOL index ('crypto VIX') — options-implied volatility for BTC or ETH.
 
