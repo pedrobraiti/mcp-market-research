@@ -948,6 +948,91 @@ class CryptoOnChain(BaseModel):
     note: str | None = None
 
 
+class BtcNetworkPoint(BaseModel):
+    """One dated sample of the BTC base-layer headline series (hash rate + NVT)."""
+
+    timestamp: datetime | None = None
+    hash_rate: Decimal | None = None  # TH/s (Blockchain.com hash-rate chart unit)
+    nvt: Decimal | None = None  # market cap / on-chain settlement USD volume that day
+
+
+class BtcNetwork(BaseModel):
+    """BTC base-layer fundamentals (Blockchain.com) + live fee market (mempool.space).
+
+    Composes two keyless sources: hash rate / miner revenue / NVT valuation, and the current
+    sat/vB fee tiers and difficulty retarget. NVT here uses ON-CHAIN settlement USD volume (the
+    `estimated-transaction-volume-usd` chart), not exchange volume — the real NVT. Raw measures of
+    network health and congestion, never a verdict. If one source is throttled the other still
+    returns, with the gap recorded in `partial`/`note` (a missing leg reads as null, never a faked
+    number — ADR-012).
+    """
+
+    # Source A — Blockchain.com fundamentals
+    hash_rate: Decimal | None = None  # TH/s
+    miners_revenue_usd: Decimal | None = None
+    n_transactions: Decimal | None = None
+    tx_volume_usd: Decimal | None = None  # on-chain settlement USD volume
+    market_cap_usd: Decimal | None = None
+    nvt: Decimal | None = None  # market_cap / tx_volume_usd
+    nvt_90d: Decimal | None = None  # market_cap / 90-day avg tx_volume_usd (null under 90 points)
+    # Source B — mempool.space fee market & difficulty
+    fee_fastest: Decimal | None = None  # sat/vB
+    fee_half_hour: Decimal | None = None
+    fee_hour: Decimal | None = None
+    fee_economy: Decimal | None = None
+    fee_minimum: Decimal | None = None
+    difficulty_change_pct: Decimal | None = None
+    difficulty_progress_pct: Decimal | None = None
+    estimated_retarget_date: datetime | None = None
+    history: list[BtcNetworkPoint] = []
+    as_of: datetime | None = None
+    source_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when a leg failed (e.g. 'unavailable: rate_limited') — so a missing field reads "
+            "as 'unavailable', not a real zero. None means both legs completed."
+        ),
+    )
+    partial: bool = False  # one leg returned, the other was throttled/unavailable
+    note: str | None = None
+
+
+class ProtocolFees(BaseModel):
+    """One protocol's daily cash flow: fees (what users pay) vs revenue (what it keeps)."""
+
+    name: str | None = None
+    category: str | None = None
+    chains: list[str] = []
+    fees_24h: Decimal | None = None
+    fees_7d: Decimal | None = None
+    revenue_24h: Decimal | None = None
+
+
+class DefiFees(BaseModel):
+    """DeFi protocol cash-flow fundamentals (DefiLlama) — fees vs revenue.
+
+    Fees = what users pay; revenue = the slice the protocol/token keeps. Real token cash flow, the
+    fundamental DeFi lacks elsewhere keyless. Overview (no `protocol`) carries totals + the top
+    protocols by 24h fees; a single `protocol` carries just its summary. Perps-DEX volume is out of
+    scope (the DefiLlama derivatives overview is Pro-gated / HTTP 402). Raw figures, not a verdict.
+    """
+
+    total_fees_24h: Decimal | None = None
+    total_fees_7d: Decimal | None = None
+    total_revenue_24h: Decimal | None = None
+    protocol: str | None = None  # set when scoped to a single protocol
+    top_protocols: list[ProtocolFees] = []
+    as_of: datetime | None = None
+    source_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when a fetch failed (e.g. 'unavailable: rate_limited') — so missing figures read "
+            "as 'unavailable', not real zeros. None means the reads completed."
+        ),
+    )
+    note: str | None = None
+
+
 class DerivativesVenue(BaseModel):
     exchange: str
     symbol: str | None = None

@@ -13,6 +13,7 @@ from typing import Protocol, runtime_checkable
 
 from .models import (
     AnalystView,
+    BtcNetwork,
     CoinbasePremium,
     CompanySnapshot,
     CotReport,
@@ -28,6 +29,7 @@ from .models import (
     CryptoQuote,
     CryptoSectors,
     CryptoSymbolSearch,
+    DefiFees,
     DefiOverview,
     DefiYields,
     DividendHistory,
@@ -349,6 +351,19 @@ class DefiSource(Protocol):
         self, chain: str | None = None, project: str | None = None, min_tvl: float = 1_000_000
     ) -> DefiYields:
         """Yield/APY pools, filterable by chain/project/min TVL."""
+        ...
+
+    async def get_fees(self, protocol: str | None = None) -> DefiFees:
+        """Protocol fees vs revenue: overview (no protocol) or one protocol's summary."""
+        ...
+
+
+@runtime_checkable
+class BtcNetworkSource(Protocol):
+    """BTC base-layer fundamentals + fee market (Blockchain.com + mempool.space today)."""
+
+    async def get_network(self) -> BtcNetwork:
+        """Hash rate / miner revenue / NVT valuation plus the live sat/vB fee market."""
         ...
 
 

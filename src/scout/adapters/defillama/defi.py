@@ -9,23 +9,37 @@ The JSON fetch is injected so the unit tests run fully offline.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from ...domain.models import (
+    DefiFees,
     DefiOverview,
     DefiTvlItem,
     DefiYields,
+    ProtocolFees,
     StablecoinItem,
     StablecoinSupply,
     YieldPool,
 )
+from ..retry import SourceUnavailable, unavailable_status, with_retry
 
 _CHAINS_URL = "https://api.llama.fi/v2/chains"
 _PROTOCOL_URL = "https://api.llama.fi/protocol/{slug}"
 _STABLES_URL = "https://stablecoins.llama.fi/stablecoins?includePrices=true"
 _YIELDS_URL = "https://yields.llama.fi/pools"
+# Fees/revenue overview: keep the response small (no per-day chart breakdowns, multi-MB otherwise).
+_FEES_OVERVIEW_URL = (
+    "https://api.llama.fi/overview/fees"
+    "?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true"
+)
+_REVENUE_OVERVIEW_URL = _FEES_OVERVIEW_URL + "&dataType=dailyRevenue"
+_PROTOCOL_FEES_URL = "https://api.llama.fi/summary/fees/{slug}?dataType=dailyFees"
+_PROTOCOL_REVENUE_URL = "https://api.llama.fi/summary/fees/{slug}?dataType=dailyRevenue"
+_TOP_PROTOCOLS = 15
 
 
 def _dec(value: Any) -> Decimal | None:
@@ -42,8 +56,12 @@ class DefiLlamaDefi:
         self,
         fetch_json: Callable[[str], Awaitable[Any]] | None = None,
         timeout: float = 20.0,
+        retry_attempts: int = 3,
+        retry_base_delay: float = 0.5,
     ) -> None:
         self._timeout = timeout
+        self._retry_attempts = retry_attempts
+        self._retry_base_delay = retry_base_delay
         self._fetch_json = fetch_json or self._default_fetch_json
 
     async def _default_fetch_json(self, url: str) -> Any:
@@ -128,3 +146,96 @@ class DefiLlamaDefi:
             )
         out.sort(key=lambda p: p.apy or Decimal(0), reverse=True)
         return DefiYields(pools=out[:25])
+
+    async def _fetch_retry(self, url: str) -> Any:
+        return await with_retry(
+            lambda: self._fetch_json(url),
+            attempts=self._retry_attempts,
+            base_delay=self._retry_base_delay,
+        )
+
+    async def get_fees(self, protocol: str | None = None) -> DefiFees:
+        if protocol and protocol.strip():
+            return await self._protocol_fees(protocol.strip())
+        return await self._fees_overview()
+
+    async def _fees_overview(self) -> DefiFees:
+        fees, revenue = await asyncio.gather(
+            self._fetch_retry(_FEES_OVERVIEW_URL),
+            self._fetch_retry(_REVENUE_OVERVIEW_URL),
+            return_exceptions=True,
+        )
+        # The fees overview is the headline. If it can't be fetched, the whole read is unavailable —
+        # surface that (ADR-012), never an all-null DefiFees that reads as "no fees exist".
+        if isinstance(fees, Exception):
+            return DefiFees(source_status=unavailable_status(fees))
+
+        revenue_by_name: dict[str, Decimal | None] = {}
+        note: str | None = None
+        if isinstance(revenue, dict):
+            for proto in revenue.get("protocols") or []:
+                if isinstance(proto, dict) and proto.get("name"):
+                    revenue_by_name[str(proto["name"])] = _dec(proto.get("total24h"))
+            total_revenue = _dec(revenue.get("total24h"))
+        else:
+            # Fees came back but the revenue leg failed: keep fees, flag the gap, leave revenue null
+            # (a null revenue must read as "unavailable", not "zero revenue").
+            total_revenue = None
+            note = f"Revenue leg {unavailable_status(revenue)}; revenue figures omitted."
+
+        protocols = [p for p in (fees.get("protocols") or []) if isinstance(p, dict)]
+        protocols.sort(key=lambda p: _dec(p.get("total24h")) or Decimal(0), reverse=True)
+        top = [
+            ProtocolFees(
+                name=p.get("name"),
+                category=p.get("category"),
+                chains=[str(c) for c in (p.get("chains") or [])],
+                fees_24h=_dec(p.get("total24h")),
+                fees_7d=_dec(p.get("total7d")),
+                revenue_24h=revenue_by_name.get(str(p.get("name"))),
+            )
+            for p in protocols[:_TOP_PROTOCOLS]
+        ]
+        return DefiFees(
+            total_fees_24h=_dec(fees.get("total24h")),
+            total_fees_7d=_dec(fees.get("total7d")),
+            total_revenue_24h=total_revenue,
+            top_protocols=top,
+            as_of=datetime.now(UTC),
+            note=note,
+        )
+
+    async def _protocol_fees(self, slug: str) -> DefiFees:
+        key = slug.lower()
+        try:
+            fees = await self._fetch_retry(_PROTOCOL_FEES_URL.format(slug=key))
+        except SourceUnavailable as exc:
+            return DefiFees(protocol=slug, source_status=exc.status)
+        except Exception:  # noqa: BLE001 — a non-transient failure (404) = unknown protocol
+            return DefiFees(
+                protocol=slug,
+                note=(
+                    f"No DefiLlama fees data for protocol '{slug}'. "
+                    "Check the slug (e.g. 'uniswap')."
+                ),
+            )
+        if not isinstance(fees, dict):
+            return DefiFees(
+                protocol=slug, note=f"No DefiLlama fees data for protocol '{slug}'."
+            )
+        # Revenue is supplementary; many protocols report none. A failure here must not sink the
+        # fees read, so revenue stays null on any error.
+        revenue_24h: Decimal | None = None
+        try:
+            revenue = await self._fetch_retry(_PROTOCOL_REVENUE_URL.format(slug=key))
+            if isinstance(revenue, dict):
+                revenue_24h = _dec(revenue.get("total24h"))
+        except Exception:  # noqa: BLE001 — revenue is best-effort
+            revenue_24h = None
+        return DefiFees(
+            protocol=slug,
+            total_fees_24h=_dec(fees.get("total24h")),
+            total_fees_7d=_dec(fees.get("total7d")),
+            total_revenue_24h=revenue_24h,
+            as_of=datetime.now(UTC),
+        )

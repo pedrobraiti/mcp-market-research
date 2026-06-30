@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from ..adapters.alternative import AlternativeFearGreed
 from ..adapters.apewisdom import ApeWisdomBuzz
+from ..adapters.btc_network import BtcNetworkData
 from ..adapters.ccxt import CcxtMarketData, CcxtPremium, CcxtStablecoinPeg
 from ..adapters.cftc import CftcPositioning
 from ..adapters.coingecko import CoinGeckoMacro
@@ -31,6 +32,7 @@ from ..adapters.yfinance import YFinanceMarketData
 from ..config import Settings, get_settings
 from ..domain.ports import (
     AttentionSource,
+    BtcNetworkSource,
     ContentExtractor,
     CotSource,
     CryptoAssetSource,
@@ -76,6 +78,7 @@ class Services:
     crypto_derivatives: CryptoDerivativesSource | None = None
     crypto_vol: CryptoVolSource | None = None
     defi: DefiSource | None = None
+    btc_network: BtcNetworkSource | None = None
     crypto_macro: CryptoMacroSource | None = None
     crypto_premium: CryptoPremiumSource | None = None
     stablecoin_peg: StablecoinPegSource | None = None
@@ -113,6 +116,7 @@ def build_services(settings: Settings | None = None) -> Services:
         crypto_derivatives=DerivativesAggregator(timeout=timeout),
         crypto_vol=DeribitVol(timeout=timeout),
         defi=DefiLlamaDefi(timeout=timeout),
+        btc_network=BtcNetworkData(timeout=timeout),
         crypto_macro=CoinGeckoMacro(timeout=timeout),
         crypto_premium=CcxtPremium(
             us_market=CcxtMarketData(exchange="coinbase", quote_ccy="USD", timeout=timeout),

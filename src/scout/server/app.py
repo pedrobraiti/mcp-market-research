@@ -1156,6 +1156,51 @@ async def defi_yields(
 
 
 @mcp.tool()
+async def defi_fees(protocol: str | None = None) -> dict:
+    """DeFi protocol cash flow — fees (what users pay) vs revenue (what the protocol keeps).
+
+    Without `protocol`, returns ecosystem totals (`total_fees_24h/7d`, `total_revenue_24h`) and the
+    top protocols by 24h fees, each with category, chains, fees (24h/7d) and revenue (24h). With
+    `protocol` (e.g. "uniswap", "aave"), returns just that protocol's fees + revenue summary. Real
+    token cash-flow fundamentals (DefiLlama, keyless). Perps-DEX volume is intentionally excluded —
+    the DefiLlama derivatives overview is Pro-gated (HTTP 402). A 429/timeout sets `source_status:
+    unavailable: …`; an unknown protocol returns empty with a `note`. Raw figures, not a verdict.
+    """
+    svc = services()
+    if svc.defi is None:
+        return _err(ValueError("DeFi source is not configured."))
+    try:
+        result = await svc.defi.get_fees(protocol)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def btc_network() -> dict:
+    """BTC base-layer fundamentals + live fee market — network health & congestion (not a verdict).
+
+    Composes two keyless sources. From Blockchain.com: hash rate, miner revenue (USD), on-chain
+    transaction count, on-chain settlement USD volume, market cap, and the **NVT** valuation ratio
+    (`market_cap / on-chain settlement volume` — the real NVT, not exchange volume) plus a
+    90-day-smoothed `nvt_90d`. From mempool.space: the live sat/vB fee tiers (`fee_fastest` …
+    `fee_minimum`) and the difficulty retarget (`difficulty_change_pct`, `difficulty_progress_pct`,
+    `estimated_retarget_date`), with a short `history` of hash rate + NVT. If one source is
+    throttled the other still returns, with the gap in `partial`/`note` and missing fields left null
+    (never
+    faked). Raw measures of base-layer health and cost, not a call.
+    """
+    svc = services()
+    if svc.btc_network is None:
+        return _err(ValueError("BTC network source is not configured."))
+    try:
+        result = await svc.btc_network.get_network()
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 async def crypto_macro() -> dict:
     """Crypto-wide macro snapshot: total market cap, BTC/ETH dominance, DeFi share (CoinGecko).
 

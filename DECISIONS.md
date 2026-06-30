@@ -426,3 +426,57 @@ deviation + a flag, not a verdict (ADR-004).
   unavailable: <reason>`, so a missing price reads as "unavailable", not a real $0/peg. A symbol
   **not listed** on the venue (a ccxt `BadSymbol`, non-transient) is omitted from `items` with a
   `note` — distinct from a throttle. No magic number: the 50-bps depeg threshold is a named constant.
+
+## ADR-018 — BTC base-layer fundamentals + fee market (`btc_network`)
+
+**Decision.** Add a keyless `btc_network` tool composing TWO sources into one read of Bitcoin's
+base layer. From **Blockchain.com Charts** (`api.blockchain.info/charts/{chart}`): hash rate, miner
+revenue, on-chain transaction count, on-chain settlement USD volume and market cap. From
+**mempool.space** (`/api/v1/fees/recommended`, `/api/v1/difficulty-adjustment`): the live sat/vB fee
+tiers and the difficulty retarget. The valuation ratio **NVT is COMPUTED, not fetched**:
+`nvt = market_cap / estimated_transaction_volume_usd`, plus a 90-day-smoothed `nvt_90d`
+(`market_cap / 90-day average tx volume`, null under 90 daily points). A short `history` of hash
+rate + NVT over the fetched window is returned for context.
+
+**Why.** Scout had zero BTC base-layer fundamentals — the network-health / valuation dimension for
+its single most important crypto asset. NVT is the canonical on-chain valuation ratio (the crypto
+P/E analog); computing it from **on-chain settlement** volume (not exchange volume) makes it the
+*real* NVT, which is otherwise paywalled. The live fee market is the congestion/cost read. Raw
+measures, never a verdict (ADR-004).
+
+**Choices that matter.**
+- **New `btc_network` adapter dir, not folded into `onchain`.** `crypto_onchain` is a thin
+  multi-chain metric list (BTC fees/hashrate, ETH gas); `btc_network` is a richer BTC-only
+  composition with a derived ratio and a history. Kept separate so neither tool's contract bends.
+- **Two independent legs, partial-tolerant (ADR-012).** Blockchain.com and mempool.space fail
+  independently: if one is throttled the other still returns, the missing leg's fields stay **null**
+  (never faked), and `partial=True` + `source_status: unavailable: <reason>` + `note` record the
+  gap. Every network fetch is wrapped in `with_retry` so a 429/timeout backs off then surfaces an
+  honest reason instead of a silent zero.
+- **26-week fetch window.** Sized so the 90-day NVT average always has enough daily samples; the
+  90-point floor is a named constant, and `nvt_90d` is null below it rather than computed on thin
+  data.
+
+## ADR-019 — DeFi protocol cash flow: fees vs revenue (`defi_fees`)
+
+**Decision.** Extend the existing **DefiLlama** adapter (no new source dir) with a `defi_fees` tool.
+Input: optional `protocol`. Without it → ecosystem overview: `total_fees_24h/7d`,
+`total_revenue_24h`, and the top 15 protocols by 24h fees, each with category, chains, fees (24h/7d)
+and revenue (24h) — fees joined to revenue **by protocol name** from a second `dataType=dailyRevenue`
+overview call. With a `protocol` → that protocol's fees + revenue summary
+(`/summary/fees/{slug}`). Endpoints used: `/overview/fees` (± `dataType=dailyRevenue`) and
+`/summary/fees/{slug}`.
+
+**Why.** Fees (what users pay) and revenue (what the protocol/token keeps) are the real **cash-flow
+fundamentals** of a token — the DeFi analog of an income statement — which Scout's TVL/yield tools
+don't capture. All keyless on DefiLlama's free tier.
+
+**Choices that matter.**
+- **Perps-DEX deliberately excluded.** The DefiLlama derivatives overview (`/overview/derivatives`)
+  is Pro-gated (HTTP 402), so perps-DEX volume is out of free scope — documented in the tool
+  docstring rather than half-supported.
+- **Honesty over filling (ADR-012).** The fees overview is the headline: a 429/timeout on it →
+  `source_status: unavailable: <reason>` (never an all-null body that reads as "no fees exist"). The
+  revenue leg is supplementary — if it alone fails, fees still return with revenue **null** and a
+  `note`, never zero. An unknown protocol (non-transient 404) returns empty with a `note`, distinct
+  from a throttle. The top-N count and the retry policy are named constants/params.
