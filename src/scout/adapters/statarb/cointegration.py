@@ -135,10 +135,17 @@ class CointegrationAnalyzer:
         result.adf_stat = _quantize(adf, 4)
         result.is_cointegrated = adf is not None and adf < EG_CRITICAL_VALUES["5pct"]
         result.half_life_days = _quantize(stats["half_life"], 2)
+        floor = (
+            f"Requested lookback_days={lookback_days} floored to the {_MIN_OBS}-obs minimum "
+            f"(used {len(common)} overlapping closes). "
+            if lookback_days < _MIN_OBS
+            else ""
+        )
         result.note = (
-            "Engle-Granger two-step: OLS hedge ratio then a non-augmented (0-lag) Dickey-Fuller "
-            "test on the residual; adf_stat is judged against MacKinnon asymptotic critical values "
-            "(constant, no trend, one regressor). Uses yfinance split/div-adjusted closes."
+            f"{floor}Engle-Granger two-step: OLS hedge ratio then a non-augmented (0-lag) "
+            "Dickey-Fuller test on the residual; adf_stat is judged against MacKinnon asymptotic "
+            "critical values (constant, no trend, one regressor). Uses yfinance split/div-adjusted "
+            "closes."
         )
         return result
 

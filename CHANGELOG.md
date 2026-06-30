@@ -6,6 +6,17 @@ dates anchor the entries.
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-06-30
+
+### Fixed
+- **`btc_network` history NVT is no longer always null.** `_build_history` joined the market-cap
+  series to the hash-rate grid by exact unix timestamp, but Blockchain.com's market-cap chart uses
+  intraday timestamps while hash-rate/tx-volume are midnight-aligned — so every `history[].nvt` came
+  back null even when the headline NVT computed. It now joins by calendar date. (Found by user-sim.)
+- **`cointegration_test` discloses the lookback floor.** A `lookback_days` below the 30-observation
+  minimum was silently raised to 30 while the response still echoed the requested value; the `note`
+  now states when the floor was applied and how many observations were actually used.
+
 ## [0.5.1] — 2026-06-30
 
 ### Added

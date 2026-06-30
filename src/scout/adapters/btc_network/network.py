@@ -159,15 +159,23 @@ class BtcNetworkData:
         elif series[_HASH_RATE]:
             model.as_of = datetime.fromtimestamp(series[_HASH_RATE][-1][0], tz=UTC)
 
+    @staticmethod
+    def _by_date(points: list[tuple[int, Decimal]]) -> dict[Any, Decimal]:
+        """Map a (unix_ts, value) series to {date: value}. The Blockchain.com charts don't share a
+        timestamp grid — hash-rate/tx-volume are midnight-aligned but market-cap is intraday — so an
+        exact-ts join drops every NVT point. A calendar-date join (last value per day) fixes it."""
+        return {datetime.fromtimestamp(ts, tz=UTC).date(): value for ts, value in points}
+
     def _build_history(
         self, series: dict[str, list[tuple[int, Decimal]]], market_cap: Decimal | None
     ) -> list[BtcNetworkPoint]:
-        mcap_by_ts = dict(series[_MARKET_CAP])
-        txvol_by_ts = dict(series[_TX_VOLUME])
+        mcap_by_date = self._by_date(series[_MARKET_CAP])
+        txvol_by_date = self._by_date(series[_TX_VOLUME])
         points: list[BtcNetworkPoint] = []
         for ts, hash_rate in series[_HASH_RATE][-_HISTORY_POINTS:]:
-            mcap = mcap_by_ts.get(ts)
-            txvol = txvol_by_ts.get(ts)
+            day = datetime.fromtimestamp(ts, tz=UTC).date()
+            mcap = mcap_by_date.get(day)
+            txvol = txvol_by_date.get(day)
             nvt = mcap / txvol if mcap is not None and txvol and txvol > 0 else None
             points.append(
                 BtcNetworkPoint(

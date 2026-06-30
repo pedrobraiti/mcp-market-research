@@ -101,6 +101,18 @@ async def test_independent_random_walks_not_cointegrated():
     assert result.adf_stat is not None and float(result.adf_stat) > -3.34
 
 
+async def test_short_lookback_is_floored_with_an_honest_note():
+    # Plenty of data, but the caller asked for fewer days than the 30-obs minimum: the floor must
+    # be disclosed (not silently applied) and the stats still compute on the floored window.
+    closes = {
+        "A": [float(i % 7) + 100 for i in range(60)],
+        "B": [float(i % 5) + 50 for i in range(60)],
+    }
+    result = await _analyzer(closes).get_cointegration("A", "B", lookback_days=5)
+    assert result.n_obs == 30  # floored to the minimum, not 5
+    assert result.note is not None and "floored" in result.note and "lookback_days=5" in result.note
+
+
 async def test_short_overlap_nulls_stats_with_note():
     result = await _analyzer({"A": [1, 2, 3, 4, 5], "B": [2, 4, 6, 8, 10]}).get_cointegration(
         "A", "B"

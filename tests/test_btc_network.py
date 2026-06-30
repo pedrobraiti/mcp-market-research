@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from scout.adapters.btc_network import BtcNetworkData
@@ -78,6 +79,34 @@ async def test_nvt_90d_computed_with_enough_points():
     assert result.nvt_90d == Decimal("10")  # avg of 90 points (all 100) → 1000 / 100
     assert len(result.history) > 0
     assert result.history[-1].hash_rate == Decimal("200")
+    assert result.history[-1].nvt == Decimal("10")  # history NVT must populate, not just headline
+
+
+async def test_history_nvt_populates_when_market_cap_is_intraday():
+    # Real Blockchain.com behaviour: hash-rate/tx-volume are midnight-aligned but market-cap uses
+    # intraday timestamps. An exact-ts join drops every history NVT; the date join must recover it.
+    midnight = int(datetime(2024, 1, 1, tzinfo=UTC).timestamp())  # a true midnight grid
+
+    async def _fetch(url: str):
+        if "charts/hash-rate" in url:
+            return {"values": [{"x": midnight + i * 86_400, "y": 200} for i in range(5)]}
+        if "charts/estimated-transaction-volume-usd" in url:
+            return {"values": [{"x": midnight + i * 86_400, "y": 100} for i in range(5)]}
+        if "charts/market-cap" in url:  # same days, shifted to noon (stays within the day)
+            return {"values": [{"x": midnight + i * 86_400 + 43_200, "y": 1000} for i in range(5)]}
+        if "charts/miners-revenue" in url:
+            return _chart(5e7, n=5)
+        if "charts/n-transactions" in url:
+            return _chart(400000, n=5)
+        if "fees/recommended" in url:
+            return _FEES
+        if "difficulty-adjustment" in url:
+            return _DIFFICULTY
+        raise AssertionError(f"unexpected url {url}")
+
+    result = await BtcNetworkData(fetch_json=_fetch).get_network()
+    assert result.history, "history should not be empty"
+    assert all(p.nvt == Decimal("10") for p in result.history)  # 1000 / 100, joined by date
 
 
 async def test_mempool_leg_failure_keeps_fundamentals():
