@@ -15,6 +15,11 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+# --- Equities / company / macro / sentiment models ----------------------------------------
+# Result models for the equities side (quotes, fundamentals, technicals, macro, ownership,
+# options, news, attention). The crypto models start lower down (search "Crypto models").
+# When adding a model, put it under the matching section, not at the end of the file.
+
 
 class Period(StrEnum):
     ANNUAL = "annual"
@@ -1365,6 +1370,11 @@ class CryptoDossier(BaseModel):
     derivatives: CryptoDerivatives | None = None
     onchain: CryptoOnChain | None = None
     notes: list[str] = []
+
+
+# --- Catalysts, commodities & statistical pairs -------------------------------------------
+# Cross-domain additions: FDA catalysts (equities), commodity bellwether ratios (macro), and
+# the Engle-Granger cointegration / pairs models (multi-symbol StatArb).
 
 
 class FdaApproval(BaseModel):

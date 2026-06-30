@@ -60,6 +60,18 @@ def _parse_as_of(as_of: str | None) -> date | None:
     return datetime.strptime(as_of.strip(), "%Y-%m-%d").date()
 
 
+# =====================================================================================
+# TOOL MAP — this file is a flat registry of thin tool wrappers (each: read a service,
+# return the _ok/_err envelope; the real logic lives in adapters/ + analytics.py). It is
+# long by COUNT, not complexity. Navigate by `grep "async def <name>"` or jump to a
+# section divider below. When adding a tool, put it under its domain section (don't just
+# append at the end). Sections, in order:
+#   1) EQUITIES · COMPANY · MACRO · SENTIMENT
+#   2) CRYPTO
+#   3) CATALYSTS · COMMODITIES · STATISTICAL PAIRS
+# =====================================================================================
+
+# ═══════════════════════ EQUITIES · COMPANY · MACRO · SENTIMENT ═══════════════════════
 @mcp.tool()
 async def company_dossier(symbol: str, depth: str = "full", as_of: str | None = None) -> dict:
     """Consolidated one-call research dossier for a US stock/ETF — the flagship tool.
@@ -735,6 +747,7 @@ def _crypto_to_price_history(history: CryptoPriceHistory) -> PriceHistory:
     )
 
 
+# ═══════════════════════════════════════ CRYPTO ═══════════════════════════════════════
 @mcp.tool()
 async def crypto_quote(symbol: str) -> dict:
     """Live spot quote for a crypto pair: last/bid/ask and the 24h move.
@@ -1294,6 +1307,7 @@ async def crypto_dossier(symbol: str, depth: str = "full") -> dict:
         return _err(exc)
 
 
+# ═════════════════ CATALYSTS · COMMODITIES · STATISTICAL PAIRS ═════════════════
 @mcp.tool()
 async def fda_events(company: str, limit: int = 10) -> dict:
     """FDA drug approvals + recalls for a pharma/biotech sponsor (openFDA, keyless).
