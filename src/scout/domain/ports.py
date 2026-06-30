@@ -14,6 +14,7 @@ from typing import Protocol, runtime_checkable
 from .models import (
     AnalystView,
     CompanySnapshot,
+    CotReport,
     CryptoAssetProfile,
     CryptoDerivatives,
     CryptoFearGreed,
@@ -192,6 +193,15 @@ class RetailBuzzSource(Protocol):
 
     async def get_buzz(self, symbol: str | None = None, limit: int = 20) -> RetailBuzz:
         """Trending tickers by Reddit mentions, or one symbol's buzz if given."""
+        ...
+
+
+@runtime_checkable
+class CotSource(Protocol):
+    """CFTC Commitments of Traders futures positioning (keyless Socrata today)."""
+
+    async def get_positioning(self, market: str, weeks: int = 12) -> CotReport:
+        """Speculator/commercial futures positioning for a market, with ``weeks`` of history."""
         ...
 
 

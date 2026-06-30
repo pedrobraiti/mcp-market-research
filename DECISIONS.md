@@ -329,3 +329,52 @@ no-key `fredgraph.csv` path — **no new API key, no `.env` change**.
 - **Copper/gold ratio deliberately deferred.** FRED's gold fixing series were discontinued, so a
   copper-gold ratio belongs on the yfinance price path, not this FRED-only adapter. Copper level
   (`PCOPPUSDM`) is still surfaced raw.
+
+## ADR-014 — Short interest folded into `ownership` (not a new tool)
+
+**Decision.** Extend the existing `ownership` tool with a `short_interest` block instead of adding a
+separate tool. It reads the figures yfinance already exposes on `Ticker(sym).info` — `sharesShort`,
+`sharesShortPriorMonth`, `shortRatio` (days-to-cover), `shortPercentOfFloat`,
+`sharesPercentSharesOut`, `dateShortInterest` — and derives `short_interest_change_pct`
+(`(shares_short − prior_month)/prior_month × 100`, null when the prior is missing/zero).
+
+**Why.** Short interest is the other half of "who is positioned in this stock", alongside the
+13F/Form-4 holder data `ownership` already returns — a crowding/squeeze-risk read that belongs in
+the same call, not a tool of its own. yfinance carries it for free on `.info`, so no new source/key.
+
+**Choices that matter.**
+- **Point-in-time, not live.** Short interest is exchange-reported ~twice a month with a lag, so the
+  block is anchored to `short_interest_date` (the reported settlement date), never "today".
+- **Best-effort, never breaks ownership (ADR-012 / honesty).** The `.info` read is a separate,
+  slower, sometimes-missing fetch; it is wrapped in try/except and degrades to `short_interest=None`
+  rather than failing the holder read. Every field is null when the source omits it — never
+  fabricated — and the whole block is `None` (not an empty block) when no short field is present, so
+  "no data" isn't mistaken for "zero short interest".
+
+## ADR-015 — CFTC Commitments of Traders positioning (`cot_positioning`)
+
+**Decision.** Add a keyless `cot_positioning` tool over the CFTC's public Socrata endpoint
+(`publicreporting.cftc.gov/resource/jun7-fc8e.json`, the legacy futures-only report) — weekly
+futures positioning split by trader class. Input: a `market` search string ("GOLD", "CRUDE OIL",
+"E-MINI S&P", "EURO FX") and `weeks` (1..52, default 12). Returns the latest snapshot (speculator &
+commercial long/short/net, open interest), derived `noncomm_net_pct_oi`, `noncomm_net_change`
+(CFTC's own WoW delta), and `noncomm_net_zscore` (`zscore_of_last` over the window, null < 8 weeks),
+plus a weekly `history`. This is the positioning dimension Scout otherwise lacks — `net` = long −
+short shows whether speculators / commercials are crowded.
+
+**Why.** No key, no auth, broad coverage (metals/energy/grains/FX/equity-index/rates in one
+dataset). The legacy futures-only report (`jun7-fc8e`) was chosen over the disaggregated/TFF reports
+for breadth and a stable schema. Positioning is orthogonal to the price/fundamentals/options data
+already present and is a recognised contrarian-at-extremes input.
+
+**Choices that matter.**
+- **One request, client-side disambiguation.** A single date-ordered SoQL fetch (`upper(...) like
+  '%QUERY%'`, generous capped limit) can match several markets (e.g. GOLD + MICRO GOLD). The primary
+  series is the highest-latest-open-interest match; the others are listed in `matched_markets` and
+  `note` so an ambiguous query is visible, never silently wrong.
+- **Honesty over filling (ADR-012).** A 429/timeout surfaces as `source_status: unavailable: …`
+  (via `with_retry`/`SourceUnavailable`) and an empty result; a genuine no-match returns an empty
+  result WITH a `note` and no `source_status` — the two are distinguishable. The z-score is null
+  below 8 weekly points; fields are null, never fabricated, when a record omits them.
+- **Point-in-time.** Positions are as of the Tuesday, published the following Friday (~3-day lag);
+  `as_of` is the report's settlement date, stated in `note`. Reuses `analytics.zscore_of_last`.

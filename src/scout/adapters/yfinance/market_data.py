@@ -41,6 +41,7 @@ from ...domain.models import (
     PriceBar,
     PriceHistory,
     QualityMetrics,
+    ShortInterest,
     StockSplit,
     SymbolMatch,
     SymbolSearch,
@@ -764,6 +765,7 @@ class YFinanceMarketData:
             institution_percent=institution_pct,
             institutional_holders=institutions,
             insider_transactions=insiders,
+            short_interest=_short_interest(ticker),
         )
 
     def _etf_holdings_sync(self, symbol: str) -> EtfHoldings | None:
@@ -1036,6 +1038,45 @@ def _major_holder_pcts(frame: Any) -> tuple[Decimal | None, Decimal | None]:
     if "institutionsPercentHeld" in index:
         institution = _dec(frame.at["institutionsPercentHeld", column])
     return insider, institution
+
+
+def _short_interest(ticker: Any) -> ShortInterest | None:
+    """Short-interest block from yfinance's ``.info`` — bi-monthly, point-in-time.
+
+    Supplementary to the holder data: ``.info`` is a separate (slower, sometimes missing) fetch,
+    so a failure here must NOT sink the ownership read — it degrades to ``None``. Every figure is
+    null when the source doesn't expose it (never fabricated); the block itself is ``None`` when no
+    short field is present at all, so an empty block isn't mistaken for "zero short interest".
+    """
+    try:
+        info = ticker.info
+    except Exception:  # noqa: BLE001 — short interest is best-effort; never break ownership
+        return None
+    if not isinstance(info, dict):
+        return None
+    shares_short = _dec(info.get("sharesShort"))
+    prior_month = _dec(info.get("sharesShortPriorMonth"))
+    short_ratio = _dec(info.get("shortRatio"))
+    pct_float = _dec(info.get("shortPercentOfFloat"))
+    pct_out = _dec(info.get("sharesPercentSharesOut"))
+    si_date = _from_unix(info.get("dateShortInterest"))
+    if all(
+        value is None
+        for value in (shares_short, prior_month, short_ratio, pct_float, pct_out, si_date)
+    ):
+        return None
+    change_pct = None
+    if shares_short is not None and prior_month is not None and prior_month != 0:
+        change_pct = _quantize((shares_short - prior_month) / prior_month * Decimal(100), 4)
+    return ShortInterest(
+        shares_short=shares_short,
+        shares_short_prior_month=prior_month,
+        short_ratio_days_to_cover=short_ratio,
+        short_percent_of_float=pct_float,
+        short_percent_of_shares_out=pct_out,
+        short_interest_date=si_date.date() if si_date else None,
+        short_interest_change_pct=change_pct,
+    )
 
 
 def _nested(data: dict, *keys: str) -> Any:

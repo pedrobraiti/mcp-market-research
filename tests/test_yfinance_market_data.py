@@ -582,6 +582,67 @@ async def test_ownership_none_when_unavailable():
     assert await YFinanceMarketData(ticker_factory=FakeTicker).get_ownership("AAPL") is None
 
 
+async def test_ownership_parses_short_interest_and_change():
+    class ShortTicker:
+        def __init__(self, symbol):
+            self.symbol = symbol
+            self.major_holders = pd.DataFrame(
+                {"Value": [0.0007, 0.62]},
+                index=["insidersPercentHeld", "institutionsPercentHeld"],
+            )
+            self.info = {
+                "sharesShort": 12_000_000,
+                "sharesShortPriorMonth": 10_000_000,
+                "shortRatio": 3.4,
+                "shortPercentOfFloat": 0.085,
+                "sharesPercentSharesOut": 0.08,
+                "dateShortInterest": 1_718_000_000,  # epoch seconds -> a date
+            }
+
+    owner = await YFinanceMarketData(ticker_factory=ShortTicker).get_ownership("GME")
+    assert owner is not None
+    short = owner.short_interest
+    assert short is not None
+    assert short.shares_short == Decimal("12000000")
+    assert short.shares_short_prior_month == Decimal("10000000")
+    assert short.short_ratio_days_to_cover == Decimal("3.4")
+    assert short.short_percent_of_float == Decimal("0.085")
+    # (12M - 10M) / 10M * 100 = +20.0
+    assert short.short_interest_change_pct == Decimal("20.0000")
+    assert short.short_interest_date == date(2024, 6, 10)
+
+
+async def test_ownership_short_interest_change_null_without_prior():
+    class NoPriorShortTicker:
+        def __init__(self, symbol):
+            self.major_holders = pd.DataFrame(
+                {"Value": [0.0007, 0.62]},
+                index=["insidersPercentHeld", "institutionsPercentHeld"],
+            )
+            self.info = {"sharesShort": 12_000_000, "shortRatio": 3.4}
+
+    owner = await YFinanceMarketData(ticker_factory=NoPriorShortTicker).get_ownership("GME")
+    assert owner is not None
+    assert owner.short_interest is not None
+    assert owner.short_interest.shares_short == Decimal("12000000")
+    assert owner.short_interest.short_interest_change_pct is None  # no prior month -> null
+
+
+async def test_ownership_short_interest_none_when_info_absent():
+    # The holder-only OwnershipTicker has no `.info` — short_interest degrades to None, the
+    # ownership read still succeeds.
+    class HolderOnlyTicker:
+        def __init__(self, symbol):
+            self.major_holders = pd.DataFrame(
+                {"Value": [0.0007, 0.62]},
+                index=["insidersPercentHeld", "institutionsPercentHeld"],
+            )
+
+    owner = await YFinanceMarketData(ticker_factory=HolderOnlyTicker).get_ownership("AAPL")
+    assert owner is not None
+    assert owner.short_interest is None
+
+
 async def test_etf_holdings_parses_funds_data():
     class _FundsData:
         top_holdings = pd.DataFrame(

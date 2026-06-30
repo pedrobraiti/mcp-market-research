@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from ..adapters.alternative import AlternativeFearGreed
 from ..adapters.apewisdom import ApeWisdomBuzz
 from ..adapters.ccxt import CcxtMarketData
+from ..adapters.cftc import CftcPositioning
 from ..adapters.coingecko import CoinGeckoMacro
 from ..adapters.coinpaprika import CoinpaprikaAssets
 from ..adapters.defillama import DefiLlamaDefi
@@ -31,6 +32,7 @@ from ..config import Settings, get_settings
 from ..domain.ports import (
     AttentionSource,
     ContentExtractor,
+    CotSource,
     CryptoAssetSource,
     CryptoDerivativesSource,
     CryptoMacroSource,
@@ -62,6 +64,7 @@ class Services:
     retail_buzz: RetailBuzzSource | None = None
     world_macro: WorldMacroSource | None = None
     treasury: TreasurySource | None = None
+    cot: CotSource | None = None
     attention: AttentionSource | None = None
     crypto_market_data: CryptoMarketDataSource | None = None
     crypto_assets: CryptoAssetSource | None = None
@@ -90,6 +93,7 @@ def build_services(settings: Settings | None = None) -> Services:
         retail_buzz=ApeWisdomBuzz(timeout=timeout),
         world_macro=WorldBankMacro(timeout=timeout),
         treasury=TreasuryFiscal(timeout=timeout),
+        cot=CftcPositioning(timeout=timeout),
         attention=WikimediaPageviews(timeout=timeout),
         crypto_market_data=CcxtMarketData(
             exchange=settings.crypto_exchange,

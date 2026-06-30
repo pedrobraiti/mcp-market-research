@@ -577,6 +577,30 @@ class InstitutionalHolder(BaseModel):
     value: Decimal | None = None
 
 
+class ShortInterest(BaseModel):
+    """Short-interest figures for a stock (bi-monthly, exchange-reported via yfinance `.info`).
+
+    Point-in-time as of ``short_interest_date`` (the settlement date the exchange reported), not a
+    live read — short interest is published roughly twice a month with a lag. Raw facts (a crowding
+    / squeeze-risk signal the agent interprets), no verdict. Every field is null when the source
+    doesn't expose it — never fabricated.
+    """
+
+    shares_short: Decimal | None = None
+    shares_short_prior_month: Decimal | None = None
+    short_ratio_days_to_cover: Decimal | None = None  # shortRatio — days of avg volume to cover
+    short_percent_of_float: Decimal | None = None
+    short_percent_of_shares_out: Decimal | None = None
+    short_interest_date: date | None = None  # settlement date of the reported short interest
+    short_interest_change_pct: Decimal | None = Field(
+        default=None,
+        description=(
+            "(shares_short − shares_short_prior_month) / shares_short_prior_month × 100 — the "
+            "bi-monthly change in short interest. Null when the prior month is missing or zero."
+        ),
+    )
+
+
 class Ownership(BaseModel):
     """Who owns the stock: insider/institution percentages, top institutions, insider trades.
 
@@ -589,6 +613,13 @@ class Ownership(BaseModel):
     institution_percent: Decimal | None = None
     institutional_holders: list[InstitutionalHolder] = []
     insider_transactions: list[InsiderTransaction] = []
+    short_interest: ShortInterest | None = Field(
+        default=None,
+        description=(
+            "Short-interest block (shares short, days-to-cover, % of float, bi-monthly change). "
+            "Null when the source exposes no short data for the symbol."
+        ),
+    )
 
 
 class OptionsVolatility(BaseModel):
@@ -620,6 +651,61 @@ class OptionsVolatility(BaseModel):
     iv_term_slope: Decimal | None = None  # (far IV − near IV)/near IV
     iv_term_structure: str | None = None  # "contango" (far>near, calm) | "backwardation" (stress)
     note: str | None = None
+
+
+class CotWeek(BaseModel):
+    """One weekly Commitments-of-Traders point for a market (speculator side + open interest)."""
+
+    report_date: date
+    noncomm_long: Decimal | None = None
+    noncomm_short: Decimal | None = None
+    noncomm_net: Decimal | None = None  # long − short (large-speculator net positioning)
+    open_interest: Decimal | None = None
+
+
+class CotReport(BaseModel):
+    """CFTC Commitments of Traders positioning for a futures market — weekly, point-in-time.
+
+    Speculator (non-commercial) vs commercial (hedger) futures positioning from the CFTC's legacy
+    futures-only report. ``net`` = long − short. Positions are as of the Tuesday, published the
+    following Friday (~3-day lag), so ``as_of`` is the report's settlement date, NOT today. This is
+    POSITIONING, not price — raw facts and derived extremes, no verdict.
+    """
+
+    market: str  # the search string the caller passed (e.g. "GOLD")
+    market_name: str | None = None  # market_and_exchange_names of the chosen series
+    commodity_name: str | None = None
+    contract_market_name: str | None = None
+    cftc_contract_market_code: str | None = None
+    as_of: date | None = None  # latest report_date (the point-in-time settlement date)
+    open_interest: Decimal | None = None
+    noncomm_long: Decimal | None = None  # large speculators long
+    noncomm_short: Decimal | None = None  # large speculators short
+    noncomm_net: Decimal | None = None  # noncomm_long − noncomm_short
+    comm_long: Decimal | None = None  # commercials / hedgers long
+    comm_short: Decimal | None = None  # commercials / hedgers short
+    comm_net: Decimal | None = None  # comm_long − comm_short
+    noncomm_net_pct_oi: Decimal | None = None  # noncomm_net / open_interest × 100
+    noncomm_net_change: Decimal | None = None  # WoW change in noncomm net (CFTC's own deltas)
+    noncomm_net_zscore: Decimal | None = None  # noncomm_net vs the returned window (crowding gauge)
+    traders_noncomm_long: int | None = None  # count of large-spec long traders
+    traders_noncomm_short: int | None = None  # count of large-spec short traders
+    history: list[CotWeek] = []  # weekly points, oldest → newest
+    matched_markets: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Other distinct markets the search string also matched (the primary series is the "
+            "highest-open-interest match) — so an ambiguous query is visible, not silently wrong."
+        ),
+    )
+    note: str | None = None
+    source_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when the CFTC source couldn't be reached (e.g. 'unavailable: rate_limited') — so "
+            "an empty result from a 429/timeout is distinguishable from a genuine 'no market'."
+        ),
+    )
 
 
 class WorldBankIndicator(BaseModel):

@@ -474,11 +474,13 @@ async def wikipedia_attention(article: str, days: int = 30) -> dict:
 
 @mcp.tool()
 async def ownership(symbol: str) -> dict:
-    """Who owns the stock: insider & institution %, top institutions, recent insider trades.
+    """Who owns the stock: insider & institution %, top holders, insider trades, short interest.
 
     Public-record data (13F / Form 4): insider-held and institution-held %, the largest
-    institutional holders, and recent insider buy/sell transactions. A skin-in-the-game signal —
-    raw facts, not a verdict; you interpret what insider buying/selling implies.
+    institutional holders, and recent insider buy/sell transactions. Also a `short_interest` block
+    (shares short, days-to-cover, % of float/shares-out, and the bi-monthly change) — point-in-time
+    as of `short_interest_date`, a crowding/squeeze-risk read. A skin-in-the-game signal — raw
+    facts, not a verdict; you interpret what insider buying/selling and short positioning imply.
     """
     svc = services()
     try:
@@ -569,6 +571,31 @@ async def treasury_data() -> dict:
         return _err(ValueError("Treasury source is not configured."))
     try:
         result = await svc.treasury.get_data()
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def cot_positioning(market: str, weeks: int = 12) -> dict:
+    """CFTC Commitments of Traders (COT) — weekly futures positioning by trader class (keyless).
+
+    Where the "smart money" (commercials/hedgers) and the trend-followers (large speculators) are
+    positioned in a futures market. `net` = long − short. `market` is a search string matched on
+    the CFTC market name (e.g. "GOLD", "CRUDE OIL", "E-MINI S&P", "EURO FX"); `weeks` (1..52,
+    default 12) is the history depth. Returns the latest snapshot — speculator & commercial net,
+    open interest, `noncomm_net_pct_oi` (net as a share of open interest), `noncomm_net_change`
+    (week-over-week), and `noncomm_net_zscore` (crowding/extreme gauge over the window) — plus a
+    weekly `history`. If the search string matches several markets it focuses the primary series on
+    the highest-open-interest match and lists the rest in `matched_markets`/`note`. This is
+    POSITIONING, not price; data is weekly and as of the Tuesday, published the following Friday
+    (~3-day lag) — `as_of` is the settlement date. Raw facts, not a verdict.
+    """
+    svc = services()
+    if svc.cot is None:
+        return _err(ValueError("COT source is not configured."))
+    try:
+        result = await svc.cot.get_positioning(market, int(weeks))
         return _ok(result.model_dump(mode="json"))
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
