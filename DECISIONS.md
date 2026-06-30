@@ -480,3 +480,78 @@ don't capture. All keyless on DefiLlama's free tier.
   revenue leg is supplementary — if it alone fails, fees still return with revenue **null** and a
   `note`, never zero. An unknown protocol (non-transient 404) returns empty with a `note`, distinct
   from a throttle. The top-N count and the retry policy are named constants/params.
+
+## ADR-020 — FDA drug approvals + recalls (`fda_events`)
+
+**Decision.** Add a keyless `fda_events` tool over **openFDA** (an optional free key only raises
+rate limits — it is NOT required). One answer composes two independent endpoints: `/drug/drugsfda`
+for approvals (an approval is a `submissions` entry with `submission_status == "AP"`, date in
+`submission_status_date`; surface `application_number` + `products[].brand_name`) and
+`/drug/enforcement` for recalls (`recalling_firm`, `report_date`, `product_description`,
+`reason_for_recall`, `classification` = severity, `status`). Input: a sponsor/issuer `company` name
+(e.g. from `company_dossier`) + `limit`. New `openfda` adapter dir, `FdaSource` port, `FdaEvents`
+model.
+
+**Why.** Approvals and recalls are the binary up/down catalysts that move pharma/biotech — a
+dimension Scout's price/fundamentals/filings layers don't surface directly, and one of the few
+FDA-authoritative feeds available with no key.
+
+**Choices that matter.**
+- **404 NOT_FOUND is an empty result, not a failure.** openFDA returns **HTTP 404 with
+  `{"error":{"code":"NOT_FOUND"}}` when a query has ZERO matches**. The default fetch returns that
+  body (instead of raising) so the adapter records it as an empty list + `note`; only a
+  429/timeout/5xx is a genuine failure → `with_retry`/`SourceUnavailable` → `source_status:
+  unavailable: …`. The two are distinguishable (ADR-012).
+- **Two legs, independent + partial.** Approvals and recalls fail independently: a throttled leg sets
+  a labelled `source_status` ("approvals unavailable: rate_limited") and returns empty while the
+  other still returns. A genuine zero-match `note` is only emitted when BOTH legs returned cleanly
+  and both were empty — a throttle never masquerades as "no events".
+- **Name, not ticker.** Mapping a ticker to the exact sponsor-of-record string is fuzzy and out of
+  scope; the caller passes the issuer/sponsor name and the docstring says so.
+
+## ADR-021 — Clinical-trial pipeline (`clinical_trials`) — BUILT THEN WITHDRAWN (WAF-blocked)
+
+**Decision.** A keyless `clinical_trials` tool over **ClinicalTrials.gov v2** was built (adapter,
+port, models, tool, offline tests) and then **removed before shipping**. The v2 API is keyless and
+the query is correct — but the host is behind a WAF that **blocks by client TLS fingerprint**, not
+just User-Agent. Empirically: `curl` to `/api/v2/studies?...` returns **200** consistently, while the
+same request from Python **httpx** (Scout's HTTP layer) returns **403 Forbidden** — with the default
+UA, a `curl/*` UA, AND a full browser UA. Header spoofing does not move it; the block is on the TLS
+ClientHello (JA3-style), which httpx/python-ssl can't change without a browser-impersonating stack.
+
+**Why withdrawn.** Making it work would require `curl_cffi`/TLS-impersonation to defeat the WAF —
+a fragile, cat-and-mouse, ToS-gray dependency that violates Scout's "free sources first, but not
+fragile" bar (the same bar that keeps scraping sources like StockTwits/Farside out). Shipping a tool
+that always 403s live would be dishonest — it reads as a feature but never returns data. So the clean
+call is to NOT ship it rather than ship a WAF-evasion hack or a dead tool.
+
+**Status.** Deferred. Revisit only if ClinicalTrials.gov drops the fingerprint WAF, or if a different
+keyless biotech-pipeline source appears. `fda_events` (ADR-020) still covers FDA approval/recall
+catalysts, which are the harder binary events anyway. Recorded here so nobody re-attempts the v2 API
+blind and rediscovers the 403 the hard way.
+
+## ADR-022 — Commodity bellwether ratios (`commodity_ratios`)
+
+**Decision.** Add a keyless `commodity_ratios` tool computing **copper/gold** and **gold/silver**
+from ~1y of daily futures closes (`HG=F`, `GC=F`, `SI=F`). Closes the copper-gold ratio deferred
+from the macro wave. It adds **no new HTTP client**: it REUSES Scout's existing price path (the
+yfinance `MarketDataSource`) via an injected `fetch_history` callable wired in the composition root.
+For each ratio: latest value + a z-score (`zscore_of_last`, null under ~30 aligned points) + a daily
+`history`, plus the three spot prices. New `commodities` adapter dir, `CommodityRatioSource` port,
+`CommodityRatios`/`RatioPoint` models.
+
+**Why.** copper/gold (Dr. Copper vs the safe haven) is a recognised risk-appetite tell and gold/silver
+the classic precious-metals stress ratio — macro bellwethers Scout's per-symbol tools don't compose.
+The LEVEL of copper/gold is arbitrary; the trend/z-score is the signal, so the tool ships the z-score.
+
+**Choices that matter.**
+- **Reuse the price path, not a new source.** Injecting `fetch_history(symbol) -> PriceHistory` keeps
+  the futures quotes flowing through the one yfinance adapter already in the composition root and
+  keeps tests fully offline (inject a synthetic `PriceHistory`).
+- **Per-pair date alignment.** Each ratio is computed over the date **intersection** of its own two
+  legs before dividing, so a stale/missing day never silently mismatches — and a missing third leg
+  (e.g. silver) nulls only `gold_silver` with a `note`, leaving `copper_gold` intact.
+- **Honesty over filling (ADR-012).** A leg whose fetch raises sets a labelled `source_status`
+  ("copper unavailable: timeout"); a missing/empty leg nulls its ratio with a `note`; the z-score is
+  null below 30 aligned points (and below non-zero variance). Bellwethers that MEASURE, never a
+  verdict (ADR-004).

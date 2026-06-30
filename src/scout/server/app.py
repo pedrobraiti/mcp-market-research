@@ -1294,6 +1294,52 @@ async def crypto_dossier(symbol: str, depth: str = "full") -> dict:
         return _err(exc)
 
 
+@mcp.tool()
+async def fda_events(company: str, limit: int = 10) -> dict:
+    """FDA drug approvals + recalls for a pharma/biotech sponsor (openFDA, keyless).
+
+    Pharma/biotech catalysts straight from the FDA: an `approval` is a binary up-catalyst, a
+    `recall` a down-catalyst. Pass the ISSUER/SPONSOR NAME (e.g. from `company_dossier`) — mapping a
+    ticker to the exact sponsor-of-record string is fuzzy and out of scope; if nothing matches, try
+    a name variant. Returns recent `approvals` (approval_date, application_number, brand_names —
+    parsed from drugsfda submissions with status "AP") and `recalls` (report_date, product, reason,
+    classification = severity, status), composing two independent openFDA endpoints. A genuine
+    zero-match is an empty list with a `note`; a throttle/timeout sets `source_status` (the two are
+    distinguishable). Raw facts, not a verdict.
+    """
+    svc = services()
+    if svc.fda is None:
+        return _err(ValueError("FDA source is not configured."))
+    try:
+        result = await svc.fda.get_events(company, limit)
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+async def commodity_ratios() -> dict:
+    """Macro bellwether commodity ratios — copper/gold and gold/silver (yfinance, keyless).
+
+    Two classic macro tells from ~1y of daily futures closes. `copper_gold` (Dr. Copper, an
+    industrial-growth proxy, vs gold, the safe haven) reads risk appetite — rising = growth/risk-on.
+    `gold_silver` is the precious-metals ratio (a rough ~50-90 band; high = stress/deflation lean).
+    The LEVEL of copper/gold is arbitrary — the latest value plus its `*_zscore` over the daily
+    series (null under ~30 aligned points) is the signal. Also returns the three spot prices
+    (`copper_price` $/lb, `gold_price`/`silver_price` $/oz) and a daily aligned `history`. A missing
+    leg leaves that ratio null with a `note`; a fetch failure sets `source_status`. These are
+    bellwethers that MEASURE the backdrop — not verdicts.
+    """
+    svc = services()
+    if svc.commodity_ratios is None:
+        return _err(ValueError("Commodity ratios source is not configured."))
+    try:
+        result = await svc.commodity_ratios.get_ratios()
+        return _ok(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
 def main() -> None:
     mcp.run()
 

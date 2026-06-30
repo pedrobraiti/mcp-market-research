@@ -1365,3 +1365,91 @@ class CryptoDossier(BaseModel):
     derivatives: CryptoDerivatives | None = None
     onchain: CryptoOnChain | None = None
     notes: list[str] = []
+
+
+class FdaApproval(BaseModel):
+    """One drug approval, parsed from a drugsfda submission with status 'AP'.
+
+    Named ``approval_date`` (not ``date``: a field literally named ``date`` would shadow the
+    ``date`` type during annotation evaluation). Parallels ``FdaRecall.report_date``.
+    """
+
+    approval_date: date | None = None  # submission_status_date (the approval date)
+    application_number: str | None = None  # e.g. "NDA021436" / "BLA125514"
+    brand_names: list[str] = []  # brand_name(s) from the application's products
+
+
+class FdaRecall(BaseModel):
+    """One drug recall/enforcement record (openFDA enforcement endpoint)."""
+
+    report_date: date | None = None
+    product: str | None = None  # product_description
+    reason: str | None = None  # reason_for_recall
+    classification: str | None = None  # Class I / II / III (severity)
+    status: str | None = None  # Ongoing / Completed / Terminated
+
+
+class FdaEvents(BaseModel):
+    """Drug approvals + recalls for a pharma/biotech sponsor (openFDA, keyless).
+
+    Pharma/biotech catalysts: an approval is a binary up-catalyst, a recall a down-catalyst. The
+    caller passes the ISSUER/SPONSOR NAME (e.g. from ``company_dossier``); mapping a ticker to the
+    exact sponsor-of-record string is fuzzy and out of scope. Two independent openFDA endpoints
+    (drugsfda for approvals, enforcement for recalls) are composed with partial handling: a leg that
+    can't be fetched (429/timeout/5xx) sets ``source_status`` and leaves its list empty; a genuine
+    zero-match (openFDA returns HTTP 404 ``NOT_FOUND``) is an empty list, recorded in ``note`` — the
+    two are distinguishable. Raw facts, never a verdict (ADR-004/ADR-012).
+    """
+
+    company: str  # the sponsor/issuer name the caller passed
+    approvals: list[FdaApproval] = []
+    recalls: list[FdaRecall] = []
+    as_of: date | None = None  # latest approval/recall date observed
+    source_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when a leg couldn't be reached (e.g. 'approvals unavailable: rate_limited') — so "
+            "an empty list from a throttle is distinguishable from a genuine zero-match."
+        ),
+    )
+    note: str | None = None
+
+
+
+
+class RatioPoint(BaseModel):
+    """One daily aligned point of the commodity bellwether ratios."""
+
+    date: date
+    copper_gold: Decimal | None = None
+    gold_silver: Decimal | None = None
+
+
+class CommodityRatios(BaseModel):
+    """Macro bellwether commodity ratios — copper/gold and gold/silver (yfinance, keyless).
+
+    ``copper_gold`` (Dr. Copper vs the safe haven) is a risk-appetite tell: copper is an industrial
+    growth proxy, gold a fear proxy, so the ratio rising = growth/risk-on. ``gold_silver`` is the
+    classic precious-metals ratio (a rough ~50-90 band; high = stress/deflation lean). The LEVEL of
+    copper/gold is arbitrary — the trend and the z-score are the signal. These are bellwethers that
+    MEASURE the macro backdrop; they are not verdicts (ADR-004). A missing leg leaves that ratio
+    null with a ``note``; a fetch failure sets ``source_status`` (ADR-012).
+    """
+
+    copper_gold: Decimal | None = None
+    copper_gold_zscore: Decimal | None = None  # z-score of the latest copper/gold over ~1y daily
+    gold_silver: Decimal | None = None
+    gold_silver_zscore: Decimal | None = None
+    copper_price: Decimal | None = None  # HG=F, $/lb
+    gold_price: Decimal | None = None  # GC=F, $/oz
+    silver_price: Decimal | None = None  # SI=F, $/oz
+    history: list[RatioPoint] = []  # daily aligned ratios, oldest → newest
+    as_of: date | None = None
+    source_status: str | None = Field(
+        default=None,
+        description=(
+            "Set when one or more legs couldn't be reached (e.g. 'copper unavailable: timeout') "
+            "— so a null ratio from a throttle distinguishes from a genuine missing series."
+        ),
+    )
+    note: str | None = None

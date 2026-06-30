@@ -15,12 +15,14 @@ from ..adapters.ccxt import CcxtMarketData, CcxtPremium, CcxtStablecoinPeg
 from ..adapters.cftc import CftcPositioning
 from ..adapters.coingecko import CoinGeckoMacro
 from ..adapters.coinpaprika import CoinpaprikaAssets
+from ..adapters.commodities import CommodityRatioCalculator
 from ..adapters.defillama import DefiLlamaDefi
 from ..adapters.deribit import DeribitVol
 from ..adapters.derivatives import DerivativesAggregator
 from ..adapters.fred import FredMacro
 from ..adapters.gdelt import GdeltNewsSearch
 from ..adapters.onchain import OnChainNetwork
+from ..adapters.openfda import OpenFdaEvents
 from ..adapters.price_fallback import PriceFallbackMarketData
 from ..adapters.sec import SecEdgar
 from ..adapters.stooq import StooqPrices
@@ -33,6 +35,7 @@ from ..config import Settings, get_settings
 from ..domain.ports import (
     AttentionSource,
     BtcNetworkSource,
+    CommodityRatioSource,
     ContentExtractor,
     CotSource,
     CryptoAssetSource,
@@ -44,6 +47,7 @@ from ..domain.ports import (
     CryptoSentimentSource,
     CryptoVolSource,
     DefiSource,
+    FdaSource,
     FilingsSource,
     FinancialsSource,
     MacroSource,
@@ -82,6 +86,8 @@ class Services:
     crypto_macro: CryptoMacroSource | None = None
     crypto_premium: CryptoPremiumSource | None = None
     stablecoin_peg: StablecoinPegSource | None = None
+    fda: FdaSource | None = None
+    commodity_ratios: CommodityRatioSource | None = None
 
 
 def build_services(settings: Settings | None = None) -> Services:
@@ -89,6 +95,10 @@ def build_services(settings: Settings | None = None) -> Services:
     timeout = settings.request_timeout_seconds
     sec = SecEdgar(settings.sec_user_agent, timeout=timeout)  # one instance: filings + financials
     market_data = PriceFallbackMarketData(YFinanceMarketData(), StooqPrices(timeout=timeout))
+
+    async def fetch_commodity_history(symbol: str):  # reuse the existing price path, no new client
+        return await market_data.get_price_history(symbol, "1y", "1d")
+
     return Services(
         settings=settings,
         market_data=market_data,
@@ -123,4 +133,6 @@ def build_services(settings: Settings | None = None) -> Services:
             offshore_market=CcxtMarketData(exchange="binance", quote_ccy="USDT", timeout=timeout),
         ),
         stablecoin_peg=CcxtStablecoinPeg(timeout=timeout),
+        fda=OpenFdaEvents(timeout=timeout),
+        commodity_ratios=CommodityRatioCalculator(fetch_commodity_history),
     )

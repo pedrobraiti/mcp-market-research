@@ -15,6 +15,7 @@ from .models import (
     AnalystView,
     BtcNetwork,
     CoinbasePremium,
+    CommodityRatios,
     CompanySnapshot,
     CotReport,
     CryptoAssetProfile,
@@ -36,6 +37,7 @@ from .models import (
     EarningsInfo,
     EtfHoldings,
     ExtractedPage,
+    FdaEvents,
     FilingSearch,
     FilingsList,
     Fundamentals,
@@ -377,4 +379,24 @@ class CryptoMacroSource(Protocol):
 
     async def get_sectors(self) -> CryptoSectors:
         """Per-category (sector) performance."""
+        ...
+
+
+@runtime_checkable
+class FdaSource(Protocol):
+    """Drug approvals + recalls for a pharma/biotech sponsor (openFDA, keyless)."""
+
+    async def get_events(self, company: str, limit: int = 10) -> FdaEvents:
+        """Approvals (drugsfda) and recalls (enforcement) for a sponsor name."""
+        ...
+
+
+
+
+@runtime_checkable
+class CommodityRatioSource(Protocol):
+    """Macro bellwether commodity ratios — copper/gold, gold/silver (yfinance, keyless)."""
+
+    async def get_ratios(self) -> CommodityRatios:
+        """Latest copper/gold + gold/silver ratios, their z-scores and a daily history."""
         ...
