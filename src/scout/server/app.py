@@ -1406,7 +1406,47 @@ async def find_cointegrated_pairs(
         return _err(exc)
 
 
+def _warm_up_yfinance() -> None:
+    """Trigger yfinance's one-time curl_cffi/crumb/session setup in the MAIN thread, before the
+    async server starts. That setup DEADLOCKS if it first happens inside a FastMCP worker thread
+    (the yfinance tools run their blocking calls via ``anyio.to_thread``) — which silently hung the
+    FIRST equity/ETF tool call of every fresh MCP session (~unbounded), while never reproducing in a
+    plain-asyncio unit test. Doing the warm-up here, on the main thread, makes that setup complete
+    (~1-2s), so the first real worker-thread call is fast. Best-effort: a network failure or a
+    yfinance change must NEVER block the server from starting."""
+    try:
+        import yfinance as yf
+
+        yf.Ticker("SPY").history(period="1d")
+    except Exception:  # noqa: BLE001 — warm-up is opportunistic; startup must proceed regardless
+        pass
+
+
+def _warm_up_ccxt() -> None:
+    """Same idea as the yfinance warm-up, for ccxt/aiohttp. The first crypto call's ``load_markets``
+    hangs the first crypto tool of a fresh MCP session; doing a throwaway exchange call here (main
+    thread, own event loop, then closed) warms ccxt's import + connection setup so the real,
+    loop-bound exchange builds fast. Best-effort; a failure must never block startup."""
+    try:
+        import asyncio
+
+        import ccxt.async_support as ccxt
+
+        async def _go() -> None:
+            ex = ccxt.binance({"enableRateLimit": True})
+            try:
+                await ex.load_markets()
+            finally:
+                await ex.close()
+
+        asyncio.run(_go())
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main() -> None:
+    _warm_up_yfinance()
+    _warm_up_ccxt()
     mcp.run()
 
 

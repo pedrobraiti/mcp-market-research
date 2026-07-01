@@ -236,3 +236,28 @@ def test_attach_stablecoin_ratios_computes_ssr():
     app_module._attach_stablecoin_ratios(untouched, None)
     assert untouched.stablecoin_supply_ratio is None
     assert untouched.stablecoin_dominance is None
+
+
+def test_warm_up_yfinance_swallows_errors(monkeypatch):
+    """The startup warm-up must NEVER block the server from starting — a failure is swallowed."""
+    import yfinance
+
+    from scout.server import app
+
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(yfinance, "Ticker", boom)
+    app._warm_up_yfinance()  # must return, not raise
+
+
+def test_warm_up_ccxt_swallows_errors(monkeypatch):
+    import ccxt.async_support as ccxt
+
+    from scout.server import app
+
+    def boom(*a, **k):
+        raise RuntimeError("no exchange")
+
+    monkeypatch.setattr(ccxt, "binance", boom)
+    app._warm_up_ccxt()  # must return, not raise

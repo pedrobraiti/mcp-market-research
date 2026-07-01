@@ -10,9 +10,10 @@ trafilatura, imported lazily so a test that injects HTML needs neither the netwo
 
 from __future__ import annotations
 
-import asyncio
 import re
 from collections.abc import Awaitable, Callable
+
+import anyio
 
 from ...domain.models import ExtractedPage
 
@@ -57,7 +58,7 @@ class WebExtractor:
             )
 
         title = _extract_title(html)
-        markdown = await asyncio.to_thread(_to_markdown, html, url)
+        markdown = await anyio.to_thread.run_sync(_to_markdown, html, url)
         if not markdown:
             return ExtractedPage(
                 url=url,

@@ -6,6 +6,23 @@ dates anchor the entries.
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-06-30
+
+### Fixed
+- **The first equity/ETF and first crypto tool call of every fresh MCP session no longer hangs.**
+  This was THE recurring "a new `/vizier` chat freezes on its first Scout call, works after a
+  retry" bug. Root cause: yfinance's one-time curl_cffi/crumb setup, and ccxt's first
+  `load_markets`, **hang when they first run under the FastMCP async server** (yfinance in a worker
+  thread, ccxt's aiohttp init) — but complete fine on the main thread / in a plain unit test, which
+  is why it never showed up until it was exercised over the real MCP stdio transport. The fix warms
+  both libraries at server startup on the main thread (`_warm_up_yfinance` + `_warm_up_ccxt`, both
+  best-effort so a network failure never blocks startup); the server now takes ~5s to start but the
+  first real call is instant instead of hanging. Verified over the real MCP transport: first
+  `search_symbols`/`price_history` ~0.3s, first `crypto_quote`/`crypto_derivatives` ~1-4s (all were
+  hanging &gt;40s before).
+- The yfinance and web adapters now offload blocking work with `anyio.to_thread.run_sync` (the
+  anyio-native primitive) instead of `asyncio.to_thread`, matching the FastMCP anyio runtime.
+
 ## [0.5.2] — 2026-06-30
 
 ### Fixed

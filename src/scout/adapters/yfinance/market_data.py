@@ -1,8 +1,12 @@
 """yfinance implementation of ``MarketDataSource``.
 
-yfinance is synchronous and network-bound, so every blocking call is pushed to a thread
-(``asyncio.to_thread``) — this keeps the port async and lets a future ``company_dossier``
-fan several of these out concurrently with ``asyncio.gather``.
+yfinance is synchronous and network-bound, so every blocking call is pushed to a thread via
+``anyio.to_thread.run_sync`` (the anyio-native primitive — this server runs under FastMCP's anyio
+loop, so we use anyio's thread offload rather than ``asyncio.to_thread``). Beware a separate,
+subtle trap: yfinance's ONE-TIME curl_cffi/crumb setup hangs when it first runs inside a FastMCP
+worker thread (it hung the first equity/ETF tool call of every fresh MCP session, only ever over
+the stdio transport — never in a plain unit test). The cure is a main-thread warm-up at server
+startup (``app._warm_up_yfinance``) that completes that setup before any worker-thread call.
 
 The concrete ``yfinance.Ticker`` is injected via ``ticker_factory`` (imported lazily, only
 when the default factory is actually used) so the unit tests run fully offline with a fake.
@@ -10,13 +14,14 @@ when the default factory is actually used) so the unit tests run fully offline w
 
 from __future__ import annotations
 
-import asyncio
 import math
 import time
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
+
+import anyio
 
 from ...analytics import realized_volatility
 from ...domain.models import (
@@ -212,21 +217,21 @@ class YFinanceMarketData:
     async def get_snapshot(
         self, symbol: str, as_of: date | None = None
     ) -> CompanySnapshot | None:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._snapshot_sync, symbol.strip().upper(), as_of
         )
 
     async def get_fundamentals(
         self, symbol: str, period: Period = Period.ANNUAL, as_of: date | None = None
     ) -> Fundamentals | None:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._fundamentals_sync, symbol.strip().upper(), period, as_of
         )
 
     async def get_dividends(
         self, symbol: str, as_of: date | None = None
     ) -> DividendHistory | None:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._dividends_sync, symbol.strip().upper(), as_of
         )
 
@@ -237,54 +242,56 @@ class YFinanceMarketData:
         interval: str = "1d",
         as_of: date | None = None,
     ) -> PriceHistory | None:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._price_history_sync, symbol.strip().upper(), range, interval, as_of
         )
 
     async def get_news(self, symbol: str, limit: int = 10) -> NewsList | None:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._news_sync, symbol.strip().upper(), max(1, min(limit, 50))
         )
 
     async def get_earnings(self, symbol: str, as_of: date | None = None) -> EarningsInfo | None:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._earnings_sync, symbol.strip().upper(), as_of
         )
 
     async def get_analyst_view(self, symbol: str) -> AnalystView | None:
-        return await asyncio.to_thread(self._retrying, self._analyst_sync, symbol.strip().upper())
+        return await anyio.to_thread.run_sync(
+            self._retrying, self._analyst_sync, symbol.strip().upper()
+        )
 
     async def search_symbols(self, query: str, limit: int = 10) -> SymbolSearch:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._search_sync, query.strip(), max(1, min(limit, 25))
         )
 
     async def get_movers(self, category: str = "gainers", limit: int = 20) -> MoversList:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._movers_sync, category.strip().lower(), max(1, min(limit, 50))
         )
 
     async def get_quality_metrics(
         self, symbol: str, as_of: date | None = None
     ) -> QualityMetrics | None:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._quality_sync, symbol.strip().upper(), as_of
         )
 
     async def get_etf_holdings(self, symbol: str) -> EtfHoldings | None:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._etf_holdings_sync, symbol.strip().upper()
         )
 
     async def get_ownership(self, symbol: str) -> Ownership | None:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._ownership_sync, symbol.strip().upper()
         )
 
     async def get_options_volatility(
         self, symbol: str, expiry: str | None = None
     ) -> OptionsVolatility | None:
-        return await asyncio.to_thread(
+        return await anyio.to_thread.run_sync(
             self._retrying, self._options_sync, symbol.strip().upper(), expiry
         )
 
