@@ -74,6 +74,11 @@ Then just ask the agent in natural language — e.g. *"Use the scout tools to do
 analysis you can of a stock (say MU), then write it up as a PDF with charts."* The agent fans out
 across the tools below, then composes the result itself.
 
+> **First-call note.** On start the MCP server warms up its data libraries (yfinance + ccxt) on the
+> main thread — this adds **~5s to startup** but is deliberate: those libraries' one-time setup
+> otherwise hangs when it first runs inside the async server, which would freeze the very first tool
+> call of a session. With the warm-up, the first real call is instant.
+
 **No API keys or logins required.** The only optional setting is `SCOUT_SEC_USER_AGENT` (SEC policy:
 an identifiable User-Agent) — without it the SEC tools (`filings`, `sec_financials`, `filing_search`)
 return a clear "please set it" message; everything else works keyless.
