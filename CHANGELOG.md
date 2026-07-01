@@ -6,6 +6,28 @@ dates anchor the entries.
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-07-01
+
+### Fixed
+- **The startup warm-up is now time-bounded (~10s per request).** `try/except` protected the
+  warm-up against *errors* but not against *hangs*: an unbounded network stall before `mcp.run()`
+  would delay the MCP handshake past the client's startup timeout and kill the whole server —
+  worse than starting cold (curl_cffi's session default is 30s and yfinance's crumb setup can
+  chain several requests, so the worst case reached minutes). The yfinance warm-up now runs on a
+  dedicated curl_cffi session with a 10s per-request timeout (restored to the default afterwards,
+  so runtime calls keep today's behavior); the ccxt warm-up passes `timeout: 10000` to the
+  exchange. Startup is now bounded even in the worst network pathology, ~5s typical.
+
+### Added
+- **MCP-transport smoke test (`tests/test_mcp_transport.py`) — the v0.5.3 lesson, encoded.** The
+  first-call hang class only reproduces over the REAL MCP stdio transport (spawn the server, speak
+  MCP), never through the service layer or plain unit tests — which is why nothing caught it for
+  four incidents. The new test spawns `python -m scout.server.app`, completes the handshake,
+  asserts the full tool listing (62 — a drift tripwire), and makes the FIRST call down each
+  lazy-setup path (yfinance `price_history`, ccxt `crypto_quote`) under a hard timeout. It asserts
+  "responds in bounded time", not "returns data" — an honest error envelope passes — so it is
+  CI-safe and passes offline. Runs in ~8s.
+
 ## [0.5.3] — 2026-06-30
 
 ### Fixed

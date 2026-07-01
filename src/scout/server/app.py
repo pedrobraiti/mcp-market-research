@@ -1406,6 +1406,14 @@ async def find_cointegrated_pairs(
         return _err(exc)
 
 
+# Per-request cap on the startup warm-up's HTTP calls. The warm-up runs BEFORE mcp.run(), so an
+# unbounded network stall here would delay the MCP handshake past the client's own startup timeout
+# and kill the whole server — worse than starting cold. try/except only catches errors, not hangs;
+# this bounds the hang. (curl_cffi's session default is 30s and yfinance's crumb setup can chain
+# several requests, so without this the worst case reaches minutes.)
+_WARM_UP_TIMEOUT_S = 10
+
+
 def _warm_up_yfinance() -> None:
     """Trigger yfinance's one-time curl_cffi/crumb/session setup in the MAIN thread, before the
     async server starts. That setup DEADLOCKS if it first happens inside a FastMCP worker thread
@@ -1413,11 +1421,22 @@ def _warm_up_yfinance() -> None:
     FIRST equity/ETF tool call of every fresh MCP session (~unbounded), while never reproducing in a
     plain-asyncio unit test. Doing the warm-up here, on the main thread, makes that setup complete
     (~1-2s), so the first real worker-thread call is fast. Best-effort: a network failure or a
-    yfinance change must NEVER block the server from starting."""
+    yfinance change must NEVER block the server from starting.
+
+    The session passed here becomes yfinance's process-wide singleton (``YfData``), so its timeout
+    is tightened only for the warm-up and restored to the curl_cffi default afterwards — runtime
+    calls keep today's behavior; only the warm-up itself is bounded."""
     try:
         import yfinance as yf
+        from curl_cffi import requests as curl_requests
 
-        yf.Ticker("SPY").history(period="1d")
+        session = curl_requests.Session(impersonate="chrome")
+        default_timeout = session.timeout
+        session.timeout = _WARM_UP_TIMEOUT_S
+        try:
+            yf.Ticker("SPY", session=session).history(period="1d")
+        finally:
+            session.timeout = default_timeout
     except Exception:  # noqa: BLE001 — warm-up is opportunistic; startup must proceed regardless
         pass
 
@@ -1426,14 +1445,17 @@ def _warm_up_ccxt() -> None:
     """Same idea as the yfinance warm-up, for ccxt/aiohttp. The first crypto call's ``load_markets``
     hangs the first crypto tool of a fresh MCP session; doing a throwaway exchange call here (main
     thread, own event loop, then closed) warms ccxt's import + connection setup so the real,
-    loop-bound exchange builds fast. Best-effort; a failure must never block startup."""
+    loop-bound exchange builds fast. Best-effort; a failure must never block startup. The
+    per-request ``timeout`` (ms) bounds a network stall so it can't block the MCP handshake."""
     try:
         import asyncio
 
         import ccxt.async_support as ccxt
 
         async def _go() -> None:
-            ex = ccxt.binance({"enableRateLimit": True})
+            ex = ccxt.binance(
+                {"enableRateLimit": True, "timeout": _WARM_UP_TIMEOUT_S * 1000}
+            )
             try:
                 await ex.load_markets()
             finally:
